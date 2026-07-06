@@ -1,0 +1,292 @@
+<?xml version="1.0" encoding="utf-8"?>
+<circuit>
+  <version>2</version>
+  <attributes/>
+  <visualElements>
+    <visualElement>
+      <elementName>External</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Label</string>
+          <string>somador_avx</string>
+        </entry>
+        <entry>
+          <string>applicationType</string>
+          <appType>GHDL</appType>
+        </entry>
+        <entry>
+          <string>externalInputs</string>
+          <string>A_i:32,B_i:32,mode_i,vecSize_i:2</string>
+        </entry>
+        <entry>
+          <string>Code</string>
+          <string>library ieee;
+use ieee.std_logic_1164.all;
+
+entity somador_avx is
+	port (
+		A_i	: IN std_logic_vector(31 downto 0); -- Entrada A_i
+		B_i	: IN  std_logic_vector(31 downto 0); -- Entrada B_i
+		mode_i	: IN std_logic; -- Operacao (soma ou subtracao)
+		vecSize_i : IN std_logic_vector(1 downto 0); -- tamanho do vetor (4, 8, 16 ou 32 bits)
+
+		S_o : OUT std_logic_vector(31 downto 0) -- saida (resultado da operacao)
+	);
+end somador_avx;
+
+architecture calculator of somador_avx is
+	signal criate  : std_logic_vector(31 downto 0); -- 1+1 (cria carry)
+	signal passing : std_logic_vector(31 downto 0); -- carry lookahead
+	signal carry   : std_logic_vector(31 downto 0); -- carry
+	signal B_adj   : std_logic_vector(31 downto 0); -- entrada B ajustada
+begin
+
+	process(all)
+		variable x : std_logic;
+	begin
+		-- barra a segunda entrada(B_i) se a operacao for uma subtracao (complemento de 2) 
+		if mode_i = &apos;1&apos; then
+			B_adj &lt;= not B_i; -- barra B_i
+			carry(0) &lt;= &apos;1&apos;; -- soma 1
+			x := &apos;1&apos;;
+		else
+			B_adj &lt;= B_i;
+			carry(0) &lt;= &apos;0&apos;;
+			x := &apos;0&apos;;
+		end if;
+
+		---------------------------------------------------------------
+		-- ajustando o carry e os auxiliares
+		for item in 0 to 31 loop
+			criate(item)  &lt;= (A_i(item) and B_adj(item));
+			passing(item) &lt;= (A_i(item) or B_adj(item));
+		end loop;
+		
+		-- mudar bits de 1 a 3
+		for i in 1 to 3 loop
+			carry(i) &lt;= (criate(i-1) or (passing(i-1) and carry(i-1))); 
+		end loop;
+		
+		-- mudar bit 4
+		if vecSize_i = &quot;00&quot; then
+			carry(4) &lt;= x;
+		else
+			carry(4) &lt;= (criate(3) or (passing(3) and carry(3)));
+		end if;
+		
+		-- mudar bits de 5 a 7
+		for i in 5 to 7 loop
+			carry(i) &lt;= (criate(i-1) or (passing(i-1) and carry(i-1))); 
+		end loop;
+		
+		-- mudar bit 8
+		if vecSize_i = &quot;00&quot; or vecSize_i = &quot;01&quot; then
+			carry(8) &lt;= x;
+		else
+			carry(8) &lt;= (criate(7) or (passing(7) and carry(7)));
+		end if;
+		
+		-- mudar bits de 9 a 11
+		for i in 9 to 11 loop
+			carry(i) &lt;= (criate(i-1) or (passing(i-1) and carry(i-1))); 
+		end loop;
+		
+		-- mudar bit 12
+		if vecSize_i = &quot;00&quot; then
+			carry(12) &lt;= x;
+		else
+			carry(12) &lt;= (criate(11) or (passing(11) and carry(11)));
+		end if;
+		
+		-- mudar bits de 13 a 15
+		for i in 13 to 15 loop
+			carry(i) &lt;= (criate(i-1) or (passing(i-1) and carry(i-1))); 
+		end loop;
+		
+		-- mudar bit 16
+		if vecSize_i = &quot;00&quot; or vecSize_i = &quot;01&quot; or vecSize_i = &quot;10&quot; then
+			carry(16) &lt;= x;
+		else
+			carry(16) &lt;= (criate(15) or (passing(15) and carry(15)));
+		end if;
+		
+		-- mudar bits de 17 a 19
+		for i in 17 to 19 loop
+			carry(i) &lt;= (criate(i-1) or (passing(i-1) and carry(i-1))); 
+		end loop;
+		
+		-- mudar bit 20
+		if vecSize_i = &quot;00&quot; then
+			carry(20) &lt;= x;
+		else
+			carry(20) &lt;= (criate(19) or (passing(19) and carry(19)));
+		end if;
+		
+		-- mudar bits de 21 a 23
+		for i in 21 to 23 loop
+			carry(i) &lt;= (criate(i-1) or (passing(i-1) and carry(i-1))); 
+		end loop;
+		
+		-- mudar bit 24
+		if vecSize_i = &quot;00&quot; or vecSize_i = &quot;01&quot; then
+			carry(24) &lt;= x;
+		else
+			carry(24) &lt;= (criate(23) or (passing(23) and carry(23)));
+		end if;
+		
+		-- mudar bits de 25 a 27
+		for i in 25 to 27 loop
+			carry(i) &lt;= (criate(i-1) or (passing(i-1) and carry(i-1))); 
+		end loop;
+ 		
+		-- mudar bit 28
+		if vecSize_i = &quot;00&quot; then
+			carry(28) &lt;= x;
+		else
+			carry(28) &lt;= (criate(27) or (passing(27) and carry(27)));
+		end if;
+		
+		-- mudar bits de 29 a 31
+		for i in 29 to 31 loop
+			carry(i) &lt;= (criate(i-1) or (passing(i-1) and carry(i-1)));
+		end loop;
+		---------------------------------------------------------------
+	end process;
+
+	-- resultado (S_o)
+	soma: for j in 0 to 31 generate
+		S_o(j) &lt;= (A_i(j) xor B_adj(j) xor carry(j));
+	end generate soma;
+
+end calculator;</string>
+        </entry>
+        <entry>
+          <string>externalOutputs</string>
+          <string>S_o:32</string>
+        </entry>
+      </elementAttributes>
+      <pos x="620" y="100"/>
+    </visualElement>
+    <visualElement>
+      <elementName>In</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Label</string>
+          <string>A_i</string>
+        </entry>
+        <entry>
+          <string>Bits</string>
+          <int>32</int>
+        </entry>
+      </elementAttributes>
+      <pos x="380" y="20"/>
+    </visualElement>
+    <visualElement>
+      <elementName>In</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Label</string>
+          <string>B_i</string>
+        </entry>
+        <entry>
+          <string>Bits</string>
+          <int>32</int>
+        </entry>
+      </elementAttributes>
+      <pos x="380" y="80"/>
+    </visualElement>
+    <visualElement>
+      <elementName>In</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Label</string>
+          <string>mode_i</string>
+        </entry>
+      </elementAttributes>
+      <pos x="380" y="140"/>
+    </visualElement>
+    <visualElement>
+      <elementName>In</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Label</string>
+          <string>vecSize_i</string>
+        </entry>
+        <entry>
+          <string>Bits</string>
+          <int>2</int>
+        </entry>
+      </elementAttributes>
+      <pos x="380" y="200"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Out</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Label</string>
+          <string>S_o</string>
+        </entry>
+        <entry>
+          <string>Bits</string>
+          <int>32</int>
+        </entry>
+      </elementAttributes>
+      <pos x="800" y="140"/>
+    </visualElement>
+  </visualElements>
+  <wires>
+    <wire>
+      <p1 x="500" y="160"/>
+      <p2 x="620" y="160"/>
+    </wire>
+    <wire>
+      <p1 x="380" y="80"/>
+      <p2 x="420" y="80"/>
+    </wire>
+    <wire>
+      <p1 x="520" y="180"/>
+      <p2 x="620" y="180"/>
+    </wire>
+    <wire>
+      <p1 x="380" y="20"/>
+      <p2 x="520" y="20"/>
+    </wire>
+    <wire>
+      <p1 x="520" y="100"/>
+      <p2 x="620" y="100"/>
+    </wire>
+    <wire>
+      <p1 x="380" y="200"/>
+      <p2 x="520" y="200"/>
+    </wire>
+    <wire>
+      <p1 x="420" y="120"/>
+      <p2 x="620" y="120"/>
+    </wire>
+    <wire>
+      <p1 x="380" y="140"/>
+      <p2 x="500" y="140"/>
+    </wire>
+    <wire>
+      <p1 x="680" y="140"/>
+      <p2 x="800" y="140"/>
+    </wire>
+    <wire>
+      <p1 x="500" y="140"/>
+      <p2 x="500" y="160"/>
+    </wire>
+    <wire>
+      <p1 x="420" y="80"/>
+      <p2 x="420" y="120"/>
+    </wire>
+    <wire>
+      <p1 x="520" y="180"/>
+      <p2 x="520" y="200"/>
+    </wire>
+    <wire>
+      <p1 x="520" y="20"/>
+      <p2 x="520" y="100"/>
+    </wire>
+  </wires>
+  <measurementOrdering/>
+</circuit>
