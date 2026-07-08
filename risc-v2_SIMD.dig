@@ -1,0 +1,3277 @@
+<?xml version="1.0" encoding="utf-8"?>
+<circuit>
+  <version>2</version>
+  <attributes/>
+  <visualElements>
+    <visualElement>
+      <elementName>ExternalFile</elementName>
+      <elementAttributes>
+        <entry>
+          <string>applicationType</string>
+          <appType>GHDL</appType>
+        </entry>
+        <entry>
+          <string>Label</string>
+          <string>PC4</string>
+        </entry>
+        <entry>
+          <string>externalInputs</string>
+          <string>CLK,RESET,PC_in:32,WriteEnable</string>
+        </entry>
+        <entry>
+          <string>externalOutputs</string>
+          <string>PC_out:32</string>
+        </entry>
+        <entry>
+          <string>Width</string>
+          <int>5</int>
+        </entry>
+        <entry>
+          <string>CodeFile</string>
+          <file>C:\Users\Julia\Desktop\Arqcomp\PC4.vhd</file>
+        </entry>
+      </elementAttributes>
+      <pos x="-480" y="20"/>
+    </visualElement>
+    <visualElement>
+      <elementName>External</elementName>
+      <elementAttributes>
+        <entry>
+          <string>applicationType</string>
+          <appType>GHDL</appType>
+        </entry>
+        <entry>
+          <string>Label</string>
+          <string>IFID</string>
+        </entry>
+        <entry>
+          <string>externalInputs</string>
+          <string>CLK,PC_in:32,PC4_in:32,WriteEnable,Instruction_In:32</string>
+        </entry>
+        <entry>
+          <string>Code</string>
+          <string>LIBRARY ieee;
+USE ieee.std_logic_1164.all;
+
+ENTITY IFID IS
+  PORT (
+    CLK         : IN  std_logic;                    -- Entrada do CLOCK
+    PC_in        : IN  std_logic_vector(31 DOWNTO 0); -- Entrada do valor atual do PC (contador de programa)
+    PC4_in	 : IN  std_logic_vector(31 downto 0); -- Entrada do valor do PC mais 4 (próxima instrução)
+    WriteEnable   : IN std_logic;                 -- Entrada do sinal de habilitação de escrita no IFID
+    Instruction_In      : IN  std_logic_vector(31 DOWNTO 0); -- Entrada da instrução atual buscada na memória de instruções
+    PC_out       : OUT std_logic_vector(31 DOWNTO 0); -- Saída do valor atual do PC (contador de programa)
+    PC4_out	 : OUT std_logic_vector(31 downto 0); -- Saída do valor do PC mais 4 (próxima instrução)
+    Instruction_Out     : OUT std_logic_vector(31 DOWNTO 0);  -- Saída da instrução atual buscada na memória de instruções
+    Rs1 : OUT std_logic_vector(4 DOWNTO 0);  -- Saída da instrução atual buscada na memória de instruções
+    Rs2 : OUT std_logic_vector(4 DOWNTO 0);  -- Saída da instrução atual buscada na memória de instruções
+    Rd : OUT std_logic_vector(4 DOWNTO 0)  -- Saída da instrução atual buscada na memória de instruções
+    );
+END IFID;
+
+
+ARCHITECTURE TypeArchitecture OF IFID IS
+
+signal opcode : std_logic_vector(6 downto 0);	-- Opcode da Instrução
+signal s_Rs1 : std_logic_vector(4 downto 0);		-- Rs1 da Instrução
+signal s_Rs2 : std_logic_vector(4 downto 0);		-- Rs2 da Instrução
+signal s_Rd : std_logic_vector(4 downto 0);		-- Rd da Instrução
+SIGNAL IDIF : std_logic_vector(117 DOWNTO 0);  	-- Registrador de 96 bits para armazenar os valores do IFID
+
+BEGIN
+	-- Definição do Opcode da Instrução
+	opcode(0) &lt;= Instruction_In(0);
+	opcode(1) &lt;= Instruction_In(1);
+	opcode(2) &lt;= Instruction_In(2);
+	opcode(3) &lt;= Instruction_In(3);
+	opcode(4) &lt;= Instruction_In(4);
+	opcode(5) &lt;= Instruction_In(5);
+	opcode(6) &lt;= Instruction_In(6);
+
+	process(opcode)
+	begin
+	-- Rs1
+		IF NOT (opcode = &quot;1101111&quot; or opcode = &quot;0110111&quot;) THEN  -- Tipos diferentes de U e UJ tem Rs1
+		s_Rs1 (0) &lt;= Instruction_In(15);
+		s_Rs1 (1) &lt;= Instruction_In(16);
+		s_Rs1 (2) &lt;= Instruction_In(17);
+		s_Rs1 (3) &lt;= Instruction_In(18);
+		s_Rs1 (4) &lt;= Instruction_In(19);
+		END IF;
+
+	-- Rs2
+		IF (opcode = &quot;0110011&quot; or opcode = &quot;0100011&quot; or opcode = &quot;1100011&quot;) THEN  -- Tipos R, S e Sb tem Rs2
+		s_Rs2 (0) &lt;= Instruction_In(20);
+		s_Rs2 (1) &lt;= Instruction_In(21);
+		s_Rs2 (2) &lt;= Instruction_In(22);
+		s_Rs2 (3) &lt;= Instruction_In(23);
+		s_Rs2 (4) &lt;= Instruction_In(24);
+		END IF;
+
+	-- Rd
+		IF NOT (opcode = &quot;0100011&quot; or opcode = &quot;1100011&quot;) THEN  -- Tipos diferentes de S e Sb tem Rd
+		s_Rd (0) &lt;= Instruction_In(7); 
+		s_Rd (1) &lt;= Instruction_In(8);
+		s_Rd (2) &lt;= Instruction_In(9);
+		s_Rd (3) &lt;= Instruction_In(10);
+		s_Rd (4) &lt;= Instruction_In(11);
+		END IF;
+	end process;
+
+	
+	PROCESS (CLK, WriteEnable)
+	BEGIN
+		IF (rising_edge(CLK)) THEN                   	-- Detecção de subida de CLOCK
+			if (WriteEnable = &apos;1&apos;) then             	-- Vericação se o WriteEnable está habilitado
+				IDIF(31 DOWNTO 0) &lt;= Instruction_In;       
+				IDIF(63 DOWNTO 32) &lt;= PC_in;          	-- Armazena o valor atual do PC
+				IDIF(95 downto 64) &lt;= PC4_in;       	-- Armazena o valor do PC mais 4 (próxima instrução)
+				IDIF(102 downto 96) &lt;= opcode;		-- Armazena o opcode
+				IDIF(107 downto 103) &lt;= s_Rs1;		-- Armazena o Rs1
+				IDIF(112 downto 108) &lt;= s_Rs2;		-- Armazena o Rs2
+				IDIF(117 downto 113) &lt;= s_Rd;			-- Armazena o Rd
+			end if;
+		END IF;
+		IF (falling_edge(CLK)) THEN                 		-- Detecção de descida de CLOCK
+			PC_out &lt;= IDIF(63 DOWNTO 32);           	-- Definição do PC atual
+			Instruction_Out &lt;= IDIF(31 DOWNTO 0);        -- Definição da instrução armazenada
+			PC4_out &lt;= IDIF(95 downto 64);        		-- Saída de PC+4
+			Rs1 &lt;= IDIF(107 downto 103);				-- Saída do Rs1
+			Rs2 &lt;= IDIF(112 downto 108);				-- Saída do Rs2
+			Rd &lt;= IDIF(117 downto 113);				-- Saída do Rd
+		END IF;
+	END PROCESS;
+	
+END TypeArchitecture;</string>
+        </entry>
+        <entry>
+          <string>externalOutputs</string>
+          <string>PC_out:32,PC4_out:32,Instruction_Out:32,Rs1:5,Rs2:5,Rd:5</string>
+        </entry>
+        <entry>
+          <string>Width</string>
+          <int>10</int>
+        </entry>
+      </elementAttributes>
+      <pos x="140" y="0"/>
+    </visualElement>
+    <visualElement>
+      <elementName>External</elementName>
+      <elementAttributes>
+        <entry>
+          <string>applicationType</string>
+          <appType>GHDL</appType>
+        </entry>
+        <entry>
+          <string>Label</string>
+          <string>Control_Unit</string>
+        </entry>
+        <entry>
+          <string>externalInputs</string>
+          <string>instruction:32,Stall</string>
+        </entry>
+        <entry>
+          <string>Code</string>
+          <string>library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+
+entity Control_Unit is
+    port(
+        instruction                	: IN  std_logic_vector(31 downto 0);  -- Entrada da Instrução
+        Stall                			: IN  std_logic;  				   -- Entrada do Hazard
+        AluSrc, RegWrite, MemToReg 	: OUT std_logic;                      -- Sinais de Controle (1 Bit)
+        MemRead, MemWrite, Branch  	: OUT std_logic;                      -- Sinais de Controle (1 Bit)
+        Soma_PC 					: OUT std_logic;			   	   -- Sinais de Controle (1 Bit)	
+        AluOp		               	: OUT std_logic_vector(1 downto 0);   -- Saída da Operação da ALU (2 Bits)
+        S_funct7 					: OUT std_logic_vector(6 downto 0);   -- Saída do Funct7
+        S_funct3 					: OUT std_logic_vector(2 downto 0);   -- Saída do Funct3
+        S_opcode 					: OUT std_logic_vector(6 downto 0);   -- Saída do Opcode
+        JumpReg					: OUT std_logic;				   -- Indica quando a instrução é jalr	
+        mode						: OUT std_logic;				   -- Indica se é uma operação vetorial
+        Vecsize					: OUT std_logic_vector(1 downto 0));  -- Indica o tamanho do vetor
+        
+end Control_Unit;
+
+architecture TypeArchitecture of Control_Unit is
+
+signal opcode : std_logic_vector(6 downto 0);	-- Opcode da Instrução
+signal funct7 : std_logic_vector(6 downto 0);	-- Funct7 da Instrução
+signal funct3 : std_logic_vector(2 downto 0);	-- Funct3 da Instrução
+
+
+begin
+	-- Definição do Opcode da Instrução
+	opcode(0) &lt;= instruction(0);
+	opcode(1) &lt;= instruction(1);
+	opcode(2) &lt;= instruction(2);
+	opcode(3) &lt;= instruction(3);
+	opcode(4) &lt;= instruction(4);
+	opcode(5) &lt;= instruction(5);
+	opcode(6) &lt;= instruction(6);
+	Soma_PC &lt;= &apos;0&apos;; 
+	JumpReg &lt;= &apos;0&apos;;
+
+	process(Stall)
+	begin
+		IF (Stall = &apos;1&apos;) THEN
+			AluSrc &lt;= &apos;0&apos;;
+			RegWrite &lt;= &apos;0&apos;;
+			MemToReg &lt;= &apos;0&apos;;
+			MemRead &lt;= &apos;0&apos;;
+			MemWrite &lt;= &apos;0&apos;;
+			Branch &lt;= &apos;0&apos;;
+			Soma_PC &lt;= &apos;0&apos;;
+			JumpReg &lt;= &apos;0&apos;;
+		end if; 
+	end process;
+	-- Definição das Funct7, Funct3 e dos Sinais de Controle de acordo com o opcode.
+	process(opcode)
+	begin
+		IF (opcode = &quot;0110011&quot;) THEN		-- R-Type Instruction
+			funct7(6) &lt;= instruction(31);
+			funct7(5) &lt;= instruction(30);
+			funct7(4) &lt;= instruction(29);
+			funct7(3) &lt;= instruction(28);
+			funct7(2) &lt;= instruction(27);
+			funct7(1) &lt;= instruction(26);
+			funct7(0) &lt;= instruction(25);
+			funct3(2) &lt;= instruction (14);
+			funct3(1) &lt;= instruction (13);
+			funct3(0) &lt;= instruction (12);
+			AluSrc &lt;= &apos;0&apos;; 			
+			RegWrite &lt;= &apos;1&apos;;
+			MemToReg &lt;= &apos;0&apos;;
+			MemRead &lt;= &apos;0&apos;;
+			MemWrite &lt;= &apos;0&apos;;
+			Branch &lt;= &apos;0&apos;;
+			mode &lt;= &apos;0&apos;;
+			Vecsize &lt;= &quot;11&quot;;
+			AluOp &lt;= &quot;10&quot;;
+		END IF;
+		IF (opcode = &quot;0010011&quot;) THEN		-- I-Type Instruction (ADDi, ANDi, ORi, XORi, SLTi)
+			funct7(6) &lt;= &apos;0&apos;;
+			funct7(5) &lt;= &apos;0&apos;;
+			funct7(4) &lt;= &apos;0&apos;;
+			funct7(3) &lt;= &apos;0&apos;;
+			funct7(2) &lt;= &apos;0&apos;;
+			funct7(1) &lt;= &apos;0&apos;;
+			funct7(0) &lt;= &apos;0&apos;;
+			funct3(2) &lt;= instruction (14);
+			funct3(1) &lt;= instruction (13);
+			funct3(0) &lt;= instruction (12);
+			AluSrc &lt;= &apos;1&apos;; 			
+			RegWrite &lt;= &apos;1&apos;;
+			MemToReg &lt;= &apos;0&apos;;
+			MemRead &lt;= &apos;0&apos;;
+			MemWrite &lt;= &apos;0&apos;;
+			Branch &lt;= &apos;0&apos;;
+			mode &lt;= &apos;0&apos;;
+			Vecsize &lt;= &quot;11&quot;;
+			AluOp &lt;= &quot;10&quot;;
+		END IF;
+		IF (opcode = &quot;0000011&quot;) THEN		-- I-Type Instruction (Load)
+			funct7(6) &lt;= &apos;0&apos;;
+			funct7(5) &lt;= &apos;0&apos;;
+			funct7(4) &lt;= &apos;0&apos;;
+			funct7(3) &lt;= &apos;0&apos;;
+			funct7(2) &lt;= &apos;0&apos;;
+			funct7(1) &lt;= &apos;0&apos;;
+			funct7(0) &lt;= &apos;0&apos;;
+			funct3(2) &lt;= &apos;0&apos;;
+			funct3(1) &lt;= &apos;0&apos;;
+			funct3(0) &lt;= &apos;0&apos;;
+			AluSrc &lt;= &apos;1&apos;; 			
+			RegWrite &lt;= &apos;1&apos;;
+			MemToReg &lt;= &apos;1&apos;;
+			MemRead &lt;= &apos;1&apos;;
+			MemWrite &lt;= &apos;0&apos;;
+			Branch &lt;= &apos;0&apos;;
+			mode &lt;= &apos;0&apos;;
+			Vecsize &lt;= &quot;11&quot;;
+			AluOp &lt;= &quot;00&quot;;
+		END IF;
+		IF (opcode = &quot;1100111&quot;) THEN		-- I-Type Instruction (Jump) 
+			funct7(6) &lt;= &apos;0&apos;;
+			funct7(5) &lt;= &apos;0&apos;;
+			funct7(4) &lt;= &apos;0&apos;;
+			funct7(3) &lt;= &apos;0&apos;;
+			funct7(2) &lt;= &apos;0&apos;;
+			funct7(1) &lt;= &apos;0&apos;;
+			funct7(0) &lt;= &apos;0&apos;;
+			funct3(2) &lt;= &apos;0&apos;;
+			funct3(1) &lt;= &apos;0&apos;;
+			funct3(0) &lt;= &apos;0&apos;;
+			AluSrc &lt;= &apos;0&apos;; 			
+			RegWrite &lt;= &apos;0&apos;;
+			MemToReg &lt;= &apos;0&apos;;
+			MemRead &lt;= &apos;0&apos;;
+			MemWrite &lt;= &apos;0&apos;;
+			Branch &lt;= &apos;0&apos;;
+			Soma_PC &lt;= &apos;1&apos;;
+			JumpReg &lt;= &apos;1&apos;;
+			mode &lt;= &apos;0&apos;;
+			Vecsize &lt;= &quot;11&quot;;
+			AluOp &lt;= &quot;01&quot;;
+		END IF;
+		IF (opcode = &quot;0100011&quot;) THEN		-- S-Type Instruction 
+			funct7(6) &lt;= &apos;0&apos;;
+			funct7(5) &lt;= &apos;0&apos;;
+			funct7(4) &lt;= &apos;0&apos;;
+			funct7(3) &lt;= &apos;0&apos;;
+			funct7(2) &lt;= &apos;0&apos;;
+			funct7(1) &lt;= &apos;0&apos;;
+			funct7(0) &lt;= &apos;0&apos;;
+			funct3(2) &lt;= &apos;0&apos;;
+			funct3(1) &lt;= &apos;0&apos;;
+			funct3(0) &lt;= &apos;0&apos;;
+			AluSrc &lt;= &apos;1&apos;; 			
+			RegWrite &lt;= &apos;0&apos;;
+			MemToReg &lt;= &apos;0&apos;;
+			MemRead &lt;= &apos;0&apos;;
+			MemWrite &lt;= &apos;1&apos;;
+			Branch &lt;= &apos;0&apos;;
+			mode &lt;= &apos;0&apos;;
+			Vecsize &lt;= &quot;11&quot;;
+			AluOp &lt;= &quot;00&quot;;
+		END IF;
+		IF (opcode = &quot;1101111&quot;) THEN		-- UJ-Type Instruction (jal)
+			funct7(6) &lt;= &apos;0&apos;;
+			funct7(5) &lt;= &apos;0&apos;;
+			funct7(4) &lt;= &apos;0&apos;;
+			funct7(3) &lt;= &apos;0&apos;;
+			funct7(2) &lt;= &apos;0&apos;;
+			funct7(1) &lt;= &apos;0&apos;;
+			funct7(0) &lt;= &apos;0&apos;;
+			funct3(2) &lt;= &apos;0&apos;;
+			funct3(1) &lt;= &apos;0&apos;;
+			funct3(0) &lt;= &apos;0&apos;;
+			AluSrc &lt;= &apos;0&apos;; 			
+			RegWrite &lt;= &apos;1&apos;;
+			MemToReg &lt;= &apos;0&apos;;
+			MemRead &lt;= &apos;0&apos;;
+			MemWrite &lt;= &apos;0&apos;;
+			Branch &lt;= &apos;0&apos;;
+			Soma_PC &lt;= &apos;1&apos;;
+			mode &lt;= &apos;0&apos;;
+			Vecsize &lt;= &quot;11&quot;;
+			AluOp &lt;= &quot;10&quot;;
+		END IF;
+		IF (opcode = &quot;0110111&quot;) THEN		-- U-Type Instruction (lui - soma com imediato muito grande)
+			funct7(6) &lt;= &apos;0&apos;;
+			funct7(5) &lt;= &apos;0&apos;;
+			funct7(4) &lt;= &apos;0&apos;;
+			funct7(3) &lt;= &apos;0&apos;;
+			funct7(2) &lt;= &apos;0&apos;;
+			funct7(1) &lt;= &apos;0&apos;;
+			funct7(0) &lt;= &apos;0&apos;;
+			funct3(2) &lt;= &apos;0&apos;;
+			funct3(1) &lt;= &apos;0&apos;;
+			funct3(0) &lt;= &apos;0&apos;;
+			AluSrc &lt;= &apos;1&apos;; 			
+			RegWrite &lt;= &apos;1&apos;;
+			MemToReg &lt;= &apos;0&apos;;
+			MemRead &lt;= &apos;0&apos;;
+			MemWrite &lt;= &apos;0&apos;;
+			Branch &lt;= &apos;0&apos;;
+			mode &lt;= &apos;0&apos;;
+			Vecsize &lt;= &quot;11&quot;;
+			AluOp &lt;= &quot;10&quot;;
+		END IF;
+		IF (opcode = &quot;0010111&quot;) THEN		-- U-Type Instruction (auipc, soma do pc com o imediato e guarda no registrador)
+			funct7(6) &lt;= &apos;0&apos;;
+			funct7(5) &lt;= &apos;0&apos;;
+			funct7(4) &lt;= &apos;0&apos;;
+			funct7(3) &lt;= &apos;0&apos;;
+			funct7(2) &lt;= &apos;0&apos;;
+			funct7(1) &lt;= &apos;0&apos;;
+			funct7(0) &lt;= &apos;0&apos;;
+			funct3(2) &lt;= &apos;0&apos;;
+			funct3(1) &lt;= &apos;0&apos;;
+			funct3(0) &lt;= &apos;0&apos;;
+			AluSrc &lt;= &apos;1&apos;; 			
+			RegWrite &lt;= &apos;1&apos;;
+			MemToReg &lt;= &apos;0&apos;;
+			MemRead &lt;= &apos;0&apos;;
+			MemWrite &lt;= &apos;0&apos;;
+			Branch &lt;= &apos;0&apos;;
+			Soma_PC &lt;= &apos;1&apos;;
+			mode &lt;= &apos;0&apos;;
+			Vecsize &lt;= &quot;11&quot;;
+			AluOp &lt;= &quot;10&quot;;
+		END IF;
+		IF (opcode = &quot;1100011&quot;) THEN		-- Sb-Type Instruction 
+			funct7(6) &lt;= &apos;0&apos;;
+			funct7(5) &lt;= &apos;0&apos;;
+			funct7(4) &lt;= &apos;0&apos;;
+			funct7(3) &lt;= &apos;0&apos;;
+			funct7(2) &lt;= &apos;0&apos;;
+			funct7(1) &lt;= &apos;0&apos;;
+			funct7(0) &lt;= &apos;0&apos;;
+			funct3(2) &lt;= instruction (14);
+			funct3(1) &lt;= instruction (13);
+			funct3(0) &lt;= instruction (12);
+			AluSrc &lt;= &apos;0&apos;; 			
+			RegWrite &lt;= &apos;0&apos;;
+			MemToReg &lt;= &apos;0&apos;;
+			MemRead &lt;= &apos;0&apos;;
+			MemWrite &lt;= &apos;0&apos;;
+			Branch &lt;= &apos;1&apos;;
+			mode &lt;= &apos;0&apos;;
+			Vecsize &lt;= &quot;11&quot;;
+			AluOp &lt;= &quot;01&quot;;
+		END IF;
+		IF (opcode = &quot;1111100&quot;) 	THEN		-- R-Type Vetorial Instruction (4bits)
+			funct7(6) &lt;= instruction(31);
+			funct7(5) &lt;= instruction(30);
+			funct7(4) &lt;= instruction(29);
+			funct7(3) &lt;= instruction(28);
+			funct7(2) &lt;= instruction(27);
+			funct7(1) &lt;= instruction(26);
+			funct7(0) &lt;= instruction(25);
+			funct3(2) &lt;= instruction (14);
+			funct3(1) &lt;= instruction (13);
+			funct3(0) &lt;= instruction (12);
+			AluSrc &lt;= &apos;0&apos;; 			
+			RegWrite &lt;= &apos;1&apos;;
+			MemToReg &lt;= &apos;0&apos;;
+			MemRead &lt;= &apos;0&apos;;
+			MemWrite &lt;= &apos;0&apos;;
+			Branch &lt;= &apos;0&apos;;
+			mode &lt;= &apos;1&apos;;
+			Vecsize &lt;= &quot;00&quot;;
+			AluOp &lt;= &quot;10&quot;;
+		END IF;
+		IF (opcode = &quot;1111101&quot;)  THEN				-- R-Type Vetorial Instruction (8bits)
+			funct7(6) &lt;= instruction(31);
+			funct7(5) &lt;= instruction(30);
+			funct7(4) &lt;= instruction(29);
+			funct7(3) &lt;= instruction(28);
+			funct7(2) &lt;= instruction(27);
+			funct7(1) &lt;= instruction(26);
+			funct7(0) &lt;= instruction(25);
+			funct3(2) &lt;= instruction (14);
+			funct3(1) &lt;= instruction (13);
+			funct3(0) &lt;= instruction (12);
+			AluSrc &lt;= &apos;0&apos;; 			
+			RegWrite &lt;= &apos;1&apos;;
+			MemToReg &lt;= &apos;0&apos;;
+			MemRead &lt;= &apos;0&apos;;
+			MemWrite &lt;= &apos;0&apos;;
+			Branch &lt;= &apos;0&apos;;
+			mode &lt;= &apos;1&apos;;
+			Vecsize &lt;= &quot;01&quot;;
+			AluOp &lt;= &quot;10&quot;;
+		END IF;
+		IF (opcode = &quot;1111110&quot;)	THEN			-- R-Type Vetorial Instruction (16bits)
+			funct7(6) &lt;= instruction(31);
+			funct7(5) &lt;= instruction(30);
+			funct7(4) &lt;= instruction(29);
+			funct7(3) &lt;= instruction(28);
+			funct7(2) &lt;= instruction(27);
+			funct7(1) &lt;= instruction(26);
+			funct7(0) &lt;= instruction(25);
+			funct3(2) &lt;= instruction (14);
+			funct3(1) &lt;= instruction (13);
+			funct3(0) &lt;= instruction (12);
+			AluSrc &lt;= &apos;0&apos;; 			
+			RegWrite &lt;= &apos;1&apos;;
+			MemToReg &lt;= &apos;0&apos;;
+			MemRead &lt;= &apos;0&apos;;
+			MemWrite &lt;= &apos;0&apos;;
+			Branch &lt;= &apos;0&apos;;
+			mode &lt;= &apos;1&apos;;
+			Vecsize &lt;= &quot;10&quot;;
+			AluOp &lt;= &quot;10&quot;;
+		END IF;
+		IF (opcode = &quot;1111000&quot;) THEN		-- I-Type Vetorial Instruction (Soma e deslocamento)(4bits)
+			funct7(6) &lt;= &apos;0&apos;;
+			funct7(5) &lt;= &apos;0&apos;;
+			funct7(4) &lt;= &apos;0&apos;;
+			funct7(3) &lt;= &apos;0&apos;;
+			funct7(2) &lt;= &apos;0&apos;;
+			funct7(1) &lt;= &apos;0&apos;;
+			funct7(0) &lt;= &apos;0&apos;;
+			funct3(2) &lt;= instruction (14);
+			funct3(1) &lt;= instruction (13);
+			funct3(0) &lt;= instruction (12);
+			AluSrc &lt;= &apos;1&apos;; 			
+			RegWrite &lt;= &apos;1&apos;;
+			MemToReg &lt;= &apos;0&apos;;
+			MemRead &lt;= &apos;0&apos;;
+			MemWrite &lt;= &apos;0&apos;;
+			Branch &lt;= &apos;0&apos;;
+			mode &lt;= &apos;1&apos;;
+			Vecsize &lt;= &quot;00&quot;;
+			AluOp &lt;= &quot;10&quot;;
+		END IF;
+		IF (opcode = &quot;1111001&quot;) THEN		-- I-Type Vetorial Instruction (Soma e deslocamento)(8bits)
+			funct7(6) &lt;= &apos;0&apos;;
+			funct7(5) &lt;= &apos;0&apos;;
+			funct7(4) &lt;= &apos;0&apos;;
+			funct7(3) &lt;= &apos;0&apos;;
+			funct7(2) &lt;= &apos;0&apos;;
+			funct7(1) &lt;= &apos;0&apos;;
+			funct7(0) &lt;= &apos;0&apos;;
+			funct3(2) &lt;= instruction (14);
+			funct3(1) &lt;= instruction (13);
+			funct3(0) &lt;= instruction (12);
+			AluSrc &lt;= &apos;1&apos;; 			
+			RegWrite &lt;= &apos;1&apos;;
+			MemToReg &lt;= &apos;0&apos;;
+			MemRead &lt;= &apos;0&apos;;
+			MemWrite &lt;= &apos;0&apos;;
+			Branch &lt;= &apos;0&apos;;
+			mode &lt;= &apos;1&apos;;
+			Vecsize &lt;= &quot;01&quot;;
+			AluOp &lt;= &quot;10&quot;;
+		END IF;
+		IF (opcode = &quot;1111010&quot;) THEN		-- I-Type Vetorial Instruction (Soma e deslocamento)(16bits)
+			funct7(6) &lt;= &apos;0&apos;;
+			funct7(5) &lt;= &apos;0&apos;;
+			funct7(4) &lt;= &apos;0&apos;;
+			funct7(3) &lt;= &apos;0&apos;;
+			funct7(2) &lt;= &apos;0&apos;;
+			funct7(1) &lt;= &apos;0&apos;;
+			funct7(0) &lt;= &apos;0&apos;;
+			funct3(2) &lt;= instruction (14);
+			funct3(1) &lt;= instruction (13);
+			funct3(0) &lt;= instruction (12);
+			AluSrc &lt;= &apos;1&apos;; 			
+			RegWrite &lt;= &apos;1&apos;;
+			MemToReg &lt;= &apos;0&apos;;
+			MemRead &lt;= &apos;0&apos;;
+			MemWrite &lt;= &apos;0&apos;;
+			Branch &lt;= &apos;0&apos;;
+			mode &lt;= &apos;1&apos;;
+			Vecsize &lt;= &quot;10&quot;;
+			AluOp &lt;= &quot;10&quot;;
+		END IF;
+		IF (opcode = &quot;1110000&quot;) THEN		-- U-Type Vetorial Instruction (4bits)(auipc)
+			funct7(6) &lt;= &apos;0&apos;;
+			funct7(5) &lt;= &apos;0&apos;;
+			funct7(4) &lt;= &apos;0&apos;;
+			funct7(3) &lt;= &apos;0&apos;;
+			funct7(2) &lt;= &apos;0&apos;;
+			funct7(1) &lt;= &apos;0&apos;;
+			funct7(0) &lt;= &apos;0&apos;;
+			funct3(2) &lt;= &apos;0&apos;;
+			funct3(1) &lt;= &apos;0&apos;;
+			funct3(0) &lt;= &apos;0&apos;;
+			AluSrc &lt;= &apos;1&apos;; 			
+			RegWrite &lt;= &apos;1&apos;;
+			MemToReg &lt;= &apos;0&apos;;
+			MemRead &lt;= &apos;0&apos;;
+			MemWrite &lt;= &apos;0&apos;;
+			Branch &lt;= &apos;0&apos;;
+			Soma_PC &lt;= &apos;1&apos;;
+			mode &lt;= &apos;1&apos;;
+			Vecsize &lt;= &quot;00&quot;;
+			AluOp &lt;= &quot;10&quot;;
+		END IF;
+		IF (opcode = &quot;1110001&quot;) THEN		-- U-Type Vetorial Instruction (4bits)(auipc)
+			funct7(6) &lt;= &apos;0&apos;;
+			funct7(5) &lt;= &apos;0&apos;;
+			funct7(4) &lt;= &apos;0&apos;;
+			funct7(3) &lt;= &apos;0&apos;;
+			funct7(2) &lt;= &apos;0&apos;;
+			funct7(1) &lt;= &apos;0&apos;;
+			funct7(0) &lt;= &apos;0&apos;;
+			funct3(2) &lt;= &apos;0&apos;;
+			funct3(1) &lt;= &apos;0&apos;;
+			funct3(0) &lt;= &apos;0&apos;;
+			AluSrc &lt;= &apos;1&apos;; 			
+			RegWrite &lt;= &apos;1&apos;;
+			MemToReg &lt;= &apos;0&apos;;
+			MemRead &lt;= &apos;0&apos;;
+			MemWrite &lt;= &apos;0&apos;;
+			Branch &lt;= &apos;0&apos;;
+			Soma_PC &lt;= &apos;1&apos;;
+			mode &lt;= &apos;1&apos;;
+			Vecsize &lt;= &quot;01&quot;;
+			AluOp &lt;= &quot;10&quot;;
+		END IF;
+		IF (opcode = &quot;1110010&quot;) THEN		-- U-Type Vetorial Instruction (4bits)(auipc)
+			funct7(6) &lt;= &apos;0&apos;;
+			funct7(5) &lt;= &apos;0&apos;;
+			funct7(4) &lt;= &apos;0&apos;;
+			funct7(3) &lt;= &apos;0&apos;;
+			funct7(2) &lt;= &apos;0&apos;;
+			funct7(1) &lt;= &apos;0&apos;;
+			funct7(0) &lt;= &apos;0&apos;;
+			funct3(2) &lt;= &apos;0&apos;;
+			funct3(1) &lt;= &apos;0&apos;;
+			funct3(0) &lt;= &apos;0&apos;;
+			AluSrc &lt;= &apos;1&apos;; 			
+			RegWrite &lt;= &apos;1&apos;;
+			MemToReg &lt;= &apos;0&apos;;
+			MemRead &lt;= &apos;0&apos;;
+			MemWrite &lt;= &apos;0&apos;;
+			Branch &lt;= &apos;0&apos;;
+			Soma_PC &lt;= &apos;1&apos;;
+			mode &lt;= &apos;1&apos;;
+			Vecsize &lt;= &quot;10&quot;;
+			AluOp &lt;= &quot;10&quot;;
+		END IF;
+	end process;
+	S_funct7 &lt;= funct7;
+	S_funct3 &lt;= funct3;
+	S_opcode &lt;= opcode;
+end TypeArchitecture;</string>
+        </entry>
+        <entry>
+          <string>externalOutputs</string>
+          <string>AluSrc,RegWrite,MemToReg,MemRead,MemWrite,Branch,Soma_PC,AluOp:2,S_funct7:7,S_funct3:3,S_opcode:7,JumpReg,mode,Vecsize:2</string>
+        </entry>
+        <entry>
+          <string>Width</string>
+          <int>16</int>
+        </entry>
+      </elementAttributes>
+      <pos x="620" y="-500"/>
+    </visualElement>
+    <visualElement>
+      <elementName>External</elementName>
+      <elementAttributes>
+        <entry>
+          <string>applicationType</string>
+          <appType>GHDL</appType>
+        </entry>
+        <entry>
+          <string>Label</string>
+          <string>RegisterFile</string>
+        </entry>
+        <entry>
+          <string>externalInputs</string>
+          <string>ReadRegister_1:5,ReadRegister_2:5,WriteRegister:5,WriteData:32,RegWrite,CLK</string>
+        </entry>
+        <entry>
+          <string>Code</string>
+          <string>library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+
+entity RegisterFile is
+  port(
+    ReadRegister_1           : in std_logic_vector(4 downto 0);    	-- Endereço do primeiro registrador a ser lido
+    ReadRegister_2           : in std_logic_vector(4 downto 0);    	-- Endereço do segundo registrador a ser lido
+    WriteRegister      	    : in std_logic_vector(4 downto 0);    	-- Endereço do registrador a ser escrito
+    WriteData                : in  std_logic_vector(31 downto 0);     -- Dado a ser escrito
+    RegWrite  			    : in  std_logic;     				    -- Sinal de controle
+    ReadData_1         	    : out  std_logic_vector(31 downto 0);    -- Dado do primeiro registrador lido
+    ReadData_2       	    : out  std_logic_vector(31 downto 0);    -- Dado do segundo registrador lido
+    CLK                 	    : in  std_logic                        	-- Sinal do CLOCK
+    );
+end RegisterFile;
+
+architecture TypeArchitecture of RegisterFile is
+  type RegisterArray is array(0 to 31) of std_logic_vector(31 downto 0);
+  signal Registers : RegisterArray := 
+   (&quot;00000000000000000000000000000000&quot;,&quot;00000000000000000000000000000000&quot;,&quot;00000000000000000000000000000000&quot;,&quot;00000000000000000000000000000000&quot;,
+    &quot;00000000000000000000000000000000&quot;,&quot;00000000000000000000000000000000&quot;,&quot;00000000000000000000000000000000&quot;,&quot;00000000000000000000000000000000&quot;,
+    &quot;00000000000000000000000000000000&quot;,&quot;00000000000000000000000000000000&quot;,&quot;00000000000000000000000000000000&quot;,&quot;00000000000000000000000000000000&quot;,
+    &quot;00000000000000000000000000000000&quot;,&quot;00000000000000000000000000000000&quot;,&quot;00000000000000000000000000000000&quot;,&quot;00000000000000000000000000000000&quot;,
+    &quot;00000000000000000000000000000000&quot;,&quot;00000000000000000000000000000000&quot;,&quot;00000000000000000000000000000000&quot;,&quot;00000000000000000000000000000000&quot;,
+    &quot;00000000000000000000000000000000&quot;,&quot;00000000000000000000000000000000&quot;,&quot;00000000000000000000000000000000&quot;,&quot;00000000000000000000000000000000&quot;,
+    &quot;00000000000000000000000000000000&quot;,&quot;00000000000000000000000000000000&quot;,&quot;00000000000000000000000000000000&quot;,&quot;00000000000000000000000000000000&quot;,
+    &quot;00000000000000000000000000000000&quot;,&quot;00000000000000000000000000000000&quot;,&quot;00000000000000000000000000000000&quot;,&quot;00000000000000000000000000000000&quot;);
+
+begin
+  regFile : process (CLK) is
+  begin
+    if falling_edge(CLK) then
+      if (Registers(to_integer(unsigned(ReadRegister_1))) = &quot;UUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUU&quot;) THEN -- Caso o valor do registrador esteja indefinido, a saída será &quot;000...&quot;
+      	ReadData_1 &lt;= (others =&gt; &apos;0&apos;);  
+      ELSE 
+      	ReadData_1 &lt;= Registers(to_integer(unsigned(ReadRegister_1)));  -- Leitura do valor contido no registrador 1
+      END IF;
+      IF (Registers(to_integer(unsigned(ReadRegister_2))) = &quot;UUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUU&quot;) THEN -- Caso o valor do registrador esteja indefinido, a saída será &quot;000...&quot;
+      	ReadData_2 &lt;= (others =&gt; &apos;0&apos;);  
+      ELSE
+      	ReadData_2 &lt;= Registers(to_integer(unsigned(ReadRegister_2)));  -- Leitura do valor contido no registrador 2 
+      END IF;
+    end if; 
+    if rising_edge(CLK) then
+      if RegWrite = &apos;1&apos; then
+        Registers(to_integer(unsigned(WriteRegister))) &lt;= WriteData;      -- Escrita do valor no registrador selecionado
+      end if;
+    end if;
+  end process;
+  
+end TypeArchitecture;</string>
+        </entry>
+        <entry>
+          <string>externalOutputs</string>
+          <string>ReadData_1:32,ReadData_2:32</string>
+        </entry>
+        <entry>
+          <string>Width</string>
+          <int>15</int>
+        </entry>
+      </elementAttributes>
+      <pos x="620" y="60"/>
+    </visualElement>
+    <visualElement>
+      <elementName>External</elementName>
+      <elementAttributes>
+        <entry>
+          <string>applicationType</string>
+          <appType>GHDL</appType>
+        </entry>
+        <entry>
+          <string>Label</string>
+          <string>ImmGen</string>
+        </entry>
+        <entry>
+          <string>externalInputs</string>
+          <string>instruction:32</string>
+        </entry>
+        <entry>
+          <string>Code</string>
+          <string>library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+USE IEEE.NUMERIC_STD.ALL;
+
+entity ImmGen is
+    Port( 
+        instruction: in std_logic_vector(31 downto 0);  	-- Entrada da Instrução 
+        immediate: out std_logic_vector(31 downto 0)  		-- Saída do Valor Imediato
+        );
+end ImmGen;
+
+architecture Behavioral of ImmGen is
+    signal opcode       : std_logic_vector(6 downto 0);  		-- Sinal para armazenr o opcode da instrução
+    signal S_imm  : std_logic_vector(31 downto 0) := &quot;00000000000000000000000000000000&quot;;  -- Sinal auxiliar para definição do imediato
+
+begin
+
+    opcode &lt;= instruction(6 downto 0);  -- Definição do opcode
+
+    process(opcode)
+    begin
+        if (opcode = &quot;0010011&quot; or opcode = &quot;0000011&quot; or opcode = &quot;1100111&quot;) then  	-- Tipo I 
+            S_imm(11 downto 0)  &lt;= instruction(31 downto 20);  					-- Seleciona o imediato 
+            S_imm(31 downto 12) &lt;= (others =&gt; instruction(31));  				-- Extensão do Bit de Sinal
+        elsif (opcode = &quot;1101111&quot;) then  									-- Tipo UJ 
+            S_imm(20) &lt;= instruction(31);  									-- Seleciona o imediato
+            S_imm(10 downto 1) &lt;= instruction(30 downto 21);					-- Seleciona o imediato
+            S_imm(11) &lt;= instruction(20);									-- Seleciona o imediato	
+            S_imm(19 downto 12) &lt;= instruction(19 downto 12);					-- Seleciona o imediato
+            S_imm(31 downto 21) &lt;= (others =&gt; instruction(31));					-- Extensão do Bit de Sinal
+        elsif (opcode = &quot;0110111&quot; or opcode = &quot;0010111&quot;) then										-- Tipo U 
+        	  S_imm(31 downto 12) &lt;= instruction(31 downto 12);  					-- Seleciona o imediato	
+        elsif (opcode = &quot;0100011&quot;) then  									-- Tipo S 
+            S_imm(11 downto 5)  &lt;= instruction(31 downto 25);  					-- Seleciona o imediato
+            S_imm(4 downto 0)   &lt;= instruction(11 downto 7);   					-- Seleciona o imediato
+            S_imm(31 downto 12) &lt;= (others =&gt; instruction(31));  				-- Extensão do Bit de Sinal
+        elsif (opcode = &quot;1100011&quot;) then  									-- Tipo SB
+            S_imm(12)           &lt;= instruction(31);          					-- Seleciona o imediato
+            S_imm(11)           &lt;= instruction(7);           					-- Seleciona o imediato
+            S_imm(10 downto 5)  &lt;= instruction(30 downto 25);  					-- Seleciona o imediato
+            S_imm(4 downto 1)   &lt;= instruction(11 downto 8);   					-- Seleciona o imediato
+            S_imm(31 downto 13) &lt;= (others =&gt; instruction(31));  				-- Extensão do Bit de Sinal
+        end if;
+    end process;
+
+    immediate &lt;= S_imm;  												-- Atribui o valor imeadiato à saída
+
+end Behavioral;</string>
+        </entry>
+        <entry>
+          <string>externalOutputs</string>
+          <string>immediate:32</string>
+        </entry>
+        <entry>
+          <string>Width</string>
+          <int>10</int>
+        </entry>
+      </elementAttributes>
+      <pos x="660" y="220"/>
+    </visualElement>
+    <visualElement>
+      <elementName>External</elementName>
+      <elementAttributes>
+        <entry>
+          <string>applicationType</string>
+          <appType>GHDL</appType>
+        </entry>
+        <entry>
+          <string>Label</string>
+          <string>Hazard</string>
+        </entry>
+        <entry>
+          <string>externalInputs</string>
+          <string>clk,MemRead_in,Rd_EX:5,Rs1:5,Rs2:5</string>
+        </entry>
+        <entry>
+          <string>Code</string>
+          <string>library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+
+entity Hazard is 
+    port( 
+        clk                 : IN std_logic;                          -- Entrada do sinal de clock
+        MemRead_in          : IN std_logic;                          -- Sinal de controle que define quando a Memória será lida
+        Rd_EX               : IN std_logic_vector(4 downto 0);       -- Rd é o endereço de destino da operação feita pelo CPU após o estágio de EX
+        Rs1, Rs2            : IN std_logic_vector(4 downto 0);       -- Rs1 e Rs2 são os endereços dos registradores contidos na instrução
+        stall               : OUT std_logic                          -- Saída que indica se um &quot;stall&quot; (atraso) deve ser aplicado no pipeline
+    );
+end Hazard;
+
+architecture Behavioral of Hazard is
+
+    signal stall_interno : std_logic := &apos;0&apos;;  -- Signal temporário que armazena o nível lógico do stall
+
+begin
+    process(clk)
+    begin
+        if ((MemRead_in = &apos;1&apos;) and ((Rd_EX = Rs1) or (Rd_EX = Rs2))) then        -- Fórmula do livro, página 322
+            stall_interno &lt;= &apos;1&apos;;                                                -- Se o sinal de controle de MemRead_in for igual a 1 e o resultado  
+        end if;                                                                  -- do estágio de Execution estiver em Rs1 ou Rs2, realiza um stall
+    end process;
+
+    stall &lt;= stall_interno;                                                     -- Atribui o valor do signal temporário stall_interno à saída stall
+
+end Behavioral;</string>
+        </entry>
+        <entry>
+          <string>externalOutputs</string>
+          <string>stall</string>
+        </entry>
+        <entry>
+          <string>Width</string>
+          <int>10</int>
+        </entry>
+      </elementAttributes>
+      <pos x="660" y="360"/>
+    </visualElement>
+    <visualElement>
+      <elementName>External</elementName>
+      <elementAttributes>
+        <entry>
+          <string>applicationType</string>
+          <appType>GHDL</appType>
+        </entry>
+        <entry>
+          <string>Label</string>
+          <string>IDEX</string>
+        </entry>
+        <entry>
+          <string>externalInputs</string>
+          <string>CLK,ALUSrc_in,ALUOp_in:2,funct3_in:3,funct7_in:7,PC_in:32,Soma_PC_in,Branch_in,MemWrite_in,MemRead_in,RegWrite_in,MemToReg_in,read1_in:32,read2_in:32,immediate_in:32,Rd_in:5,Opcode_in:7,JumpReg_in,Rs1_In:5,Rs2_In:5,mode_in,vecsize_in:2</string>
+        </entry>
+        <entry>
+          <string>Code</string>
+          <string>LIBRARY ieee;
+USE ieee.std_logic_1164.all;
+
+ENTITY IDEX IS
+  PORT (
+    CLK             : IN std_logic;                             
+    ALUSrc_in       : IN std_logic;                             
+    ALUOp_in        : IN std_logic_vector(1 downto 0);          
+    funct3_in       : IN std_logic_vector(2 downto 0);          
+    funct7_in       : IN std_logic_vector(6 downto 0);          
+    PC_in           : IN std_logic_vector(31 DOWNTO 0);         
+    Soma_PC_in      : IN std_logic;                             
+    Branch_in       : IN std_logic;                             
+    MemWrite_in     : IN std_logic;                             
+    MemRead_in      : IN std_logic;                             
+    RegWrite_in     : IN std_logic;                             
+    MemToReg_in     : IN std_logic;                             
+    read1_in        : IN std_logic_vector(31 DOWNTO 0);         
+    read2_in        : IN std_logic_vector(31 DOWNTO 0);         
+    immediate_in    : in std_logic_vector(31 DOWNTO 0);         
+    Rd_in           : IN std_logic_vector(4 DOWNTO 0);          
+    Opcode_in       : IN std_logic_vector(6 DOWNTO 0);          
+    JumpReg_in      : IN std_Logic;                             
+    Rs1_In          : IN std_logic_vector(4 DOWNTO 0);          
+    Rs2_In          : IN std_logic_vector(4 DOWNTO 0);          
+    mode_in         : in std_logic;                             
+    vecsize_in      : in std_logic_vector(1 downto 0);          
+
+    ALUSrc_out      : out std_logic;                            
+    ALUOp_out       : out std_logic_vector(1 downto 0);         
+    funct3_out      : out std_logic_vector(2 downto 0);         
+    funct7_out      : out std_logic_vector(6 downto 0);         
+    PC_out          : out std_logic_vector(31 DOWNTO 0);        
+    Soma_PC_out     : out std_logic;                            
+    Branch_out      : out std_logic;                            
+    MemWrite_out    : out std_logic;                            
+    MemRead_out     : out std_logic;                            
+    RegWrite_out    : out std_logic;                            
+    MemToReg_out    : out std_logic;                            
+    read1_out       : out std_logic_vector(31 DOWNTO 0);        
+    read2_out       : out std_logic_vector(31 DOWNTO 0);        
+    immediate_out   : out std_logic_vector(31 DOWNTO 0);        
+    Rd_out          : out std_logic_vector(4 DOWNTO 0);         
+    Opcode_out      : out std_logic_vector(6 DOWNTO 0);         
+    JumpReg_out     : out std_Logic;                            
+    Rs1_out         : out std_logic_vector(4 DOWNTO 0);         
+    Rs2_out         : out std_logic_vector(4 DOWNTO 0);         
+    mode_out        : out std_logic;                            
+    vecsize_out     : out std_logic_vector(1 downto 0)          
+  );  
+END IDEX;
+
+ARCHITECTURE TypeArchitecture OF IDEX IS
+
+  SIGNAL idex_sig : std_logic_vector(173 DOWNTO 0);  -- 174 bits
+
+BEGIN
+
+  PROCESS (CLK)
+  BEGIN
+    IF (rising_edge(CLK)) THEN
+      idex_sig(0) &lt;= ALUSrc_in;          
+      idex_sig(2 downto 1) &lt;= ALUOp_in;          
+      idex_sig(5 DOWNTO 3) &lt;= funct3_in;      
+      idex_sig(12 DOWNTO 6) &lt;= funct7_in;
+      idex_sig(44 DOWNTO 13) &lt;= PC_in ;  
+      idex_sig(45) &lt;= Soma_PC_in;       
+      idex_sig(46) &lt;= Branch_in;   
+      idex_sig(47) &lt;= MemWrite_in;   
+      idex_sig(48) &lt;= MemRead_in;   
+      idex_sig(49) &lt;= RegWrite_in;   
+      idex_sig(50) &lt;= MemToReg_in;   
+      idex_sig(82 DOWNTO 51) &lt;= read1_in;    
+      idex_sig(114 DOWNTO 83) &lt;= read2_in;    
+      idex_sig(146 DOWNTO 115) &lt;= immediate_in;   
+      idex_sig(151 DOWNTO 147) &lt;= Rd_in;              -- Corrigido
+      idex_sig(158 downto 152) &lt;= Opcode_in;          -- Corrigido deslocamento
+      idex_sig(159) &lt;= JumpReg_in;  
+      idex_sig(164 downto 160) &lt;= Rs1_In;
+      idex_sig(169 downto 165) &lt;= Rs2_In;
+      idex_sig(170) &lt;= mode_in;        
+      idex_sig(172 downto 171) &lt;= vecsize_in;   
+    END IF;
+
+    IF (falling_edge(CLK)) THEN
+      ALUSrc_out &lt;= idex_sig(0);       
+      ALUOp_out  &lt;= idex_sig(2 downto 1);     
+      funct3_out &lt;= idex_sig(5 DOWNTO 3);      
+      funct7_out &lt;= idex_sig(12 DOWNTO 6);    
+      PC_out &lt;= idex_sig(44 DOWNTO 13);
+      Soma_PC_out &lt;= idex_sig(45);
+      Branch_out &lt;= idex_sig(46);
+      MemWrite_out &lt;= idex_sig(47);
+      MemRead_out &lt;= idex_sig(48);
+      RegWrite_out &lt;= idex_sig(49);
+      MemToReg_out &lt;= idex_sig(50);
+      read1_out &lt;= idex_sig(82 DOWNTO 51);
+      read2_out &lt;= idex_sig(114 DOWNTO 83);
+      immediate_out &lt;= idex_sig(146 DOWNTO 115);
+      Rd_out &lt;= idex_sig(151 DOWNTO 147);          -- Corrigido
+      Opcode_out &lt;= idex_sig(158 downto 152);      -- Corrigido deslocamento
+      JumpReg_out &lt;= idex_sig(159);
+      Rs1_out &lt;= idex_sig(164 downto 160);
+      Rs2_out &lt;= idex_sig(169 downto 165);
+      mode_out &lt;= idex_sig(170);
+      vecsize_out &lt;= idex_sig(172 downto 171);
+    END IF;
+  END PROCESS;
+
+END TypeArchitecture;</string>
+        </entry>
+        <entry>
+          <string>externalOutputs</string>
+          <string>ALUSrc_out,ALUOp_out:2,funct3_out:3,funct7_out:7,PC_out:32,Soma_PC_out,Branch_out,MemWrite_out,MemRead_out,RegWrite_out,MemToReg_out,read1_out:32,read2_out:32,immediate_out:32,Rd_out:5,Opcode_out:7,JumpReg_out,Rs1_out:5,Rs2_out:5,mode_out,vecsize_out:2</string>
+        </entry>
+        <entry>
+          <string>Width</string>
+          <int>16</int>
+        </entry>
+      </elementAttributes>
+      <pos x="1320" y="-60"/>
+    </visualElement>
+    <visualElement>
+      <elementName>External</elementName>
+      <elementAttributes>
+        <entry>
+          <string>applicationType</string>
+          <appType>GHDL</appType>
+        </entry>
+        <entry>
+          <string>Label</string>
+          <string>ALU_Control</string>
+        </entry>
+        <entry>
+          <string>externalInputs</string>
+          <string>Funct7:7,Funct3:3,Opcode:7,AluOp:2</string>
+        </entry>
+        <entry>
+          <string>Code</string>
+          <string>library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+
+entity ALU_Control is
+    port(
+        Funct7    		: IN std_logic_vector(6 downto 0);    	 -- Entrada do funct7
+        Funct3    		: IN std_logic_vector(2 downto 0);    	 -- Entrada do funct3
+        Opcode    		: IN std_logic_vector(6 downto 0);   	 -- Entrada do opcode
+        AluOp   		: IN std_logic_vector(1 downto 0);       -- Entrada de códigos de operação da ALU (2 bits)
+        ALU_Controle 	: OUT std_logic_vector(3 downto 0);      -- Saída do controle da ALU (4 bits)
+        Beq_Bne		: OUT std_logic					 -- Sinal de controle para verificação de Beq ou Bne
+        );
+end ALU_Control;
+
+architecture TypeArchitecture of ALU_Control is
+begin
+
+	ALU_Controle &lt;= &quot;0010&quot; when AluOp = &quot;00&quot; else 	-- Operação de Load
+			 	 &quot;0110&quot; when AluOp = &quot;01&quot; else 	-- Operação de Branch
+			 	 &quot;0010&quot; when Funct7 = &quot;0000000&quot; and Funct3 = &quot;000&quot; else 	-- Operação de Soma
+			 	 &quot;0110&quot; when Funct7 = &quot;0100000&quot; and Funct3 = &quot;000&quot; else 	-- Operação de Subtração
+			 	 &quot;0011&quot; when Funct7 = &quot;0000000&quot; and Funct3 = &quot;001&quot; else 	-- Operação de Shift Left
+			 	 &quot;0101&quot; when Funct7 = &quot;0000000&quot; and Funct3 = &quot;100&quot; else 	-- Operação XOR
+			 	 &quot;0111&quot; when Funct7 = &quot;0000000&quot; and Funct3 = &quot;101&quot; else 	-- Operação de Shift Right
+			 	 &quot;0001&quot; when Funct7 = &quot;0000000&quot; and Funct3 = &quot;110&quot; else 	-- Operação OR
+			 	 &quot;0000&quot; when Funct7 = &quot;0000000&quot; and Funct3 = &quot;111&quot;; 		-- Operação AND
+	Beq_Bne &lt;= &apos;1&apos; when opcode=&quot;1100011&quot; and Funct3=&quot;000&quot; else &apos;0&apos;;			-- &apos;1&apos; quando a instrução for Beq
+	 
+end TypeArchitecture;</string>
+        </entry>
+        <entry>
+          <string>externalOutputs</string>
+          <string>ALU_Controle:4,Beq_Bne</string>
+        </entry>
+        <entry>
+          <string>Width</string>
+          <int>20</int>
+        </entry>
+      </elementAttributes>
+      <pos x="1980" y="-40"/>
+    </visualElement>
+    <visualElement>
+      <elementName>External</elementName>
+      <elementAttributes>
+        <entry>
+          <string>applicationType</string>
+          <appType>GHDL</appType>
+        </entry>
+        <entry>
+          <string>Label</string>
+          <string>Somador</string>
+        </entry>
+        <entry>
+          <string>externalInputs</string>
+          <string>A:32,B:32</string>
+        </entry>
+        <entry>
+          <string>Code</string>
+          <string>LIBRARY ieee;
+USE ieee.std_logic_1164.all;
+USE IEEE.std_logic_unsigned.ALL; 
+
+ENTITY Somador IS
+  PORT (
+    A, B        : IN  std_logic_vector(31 DOWNTO 0); 	-- Entrada de vetores de 32 bits
+    Z           : OUT std_logic_vector(31 DOWNTO 0) 	-- Saída do vetor resultado da soma
+    );
+END Somador;
+
+ARCHITECTURE TypeArchitecture OF somador IS
+
+BEGIN
+
+Z &lt;= A + B; 									-- Vetor resultado da soma
+
+END TypeArchitecture;</string>
+        </entry>
+        <entry>
+          <string>externalOutputs</string>
+          <string>Z:32</string>
+        </entry>
+        <entry>
+          <string>Width</string>
+          <int>9</int>
+        </entry>
+      </elementAttributes>
+      <pos x="2600" y="-160"/>
+    </visualElement>
+    <visualElement>
+      <elementName>External</elementName>
+      <elementAttributes>
+        <entry>
+          <string>applicationType</string>
+          <appType>GHDL</appType>
+        </entry>
+        <entry>
+          <string>Label</string>
+          <string>ALU</string>
+        </entry>
+        <entry>
+          <string>externalInputs</string>
+          <string>A:32,B:32,controle:4,mode,vecSize:2</string>
+        </entry>
+        <entry>
+          <string>Code</string>
+          <string>library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+use ieee.numeric_std.ALL;
+use IEEE.std_logic_unsigned.ALL;
+
+entity ALU is
+    port(
+    A, B       : in std_logic_vector(31 downto 0);   -- Operandos A e B de 32 bits da ALU
+    controle   : in std_logic_vector(3 downto 0);    -- Entrada responsável por determinar a operação da ALU
+    resultado  : out std_logic_vector(31 downto 0);  -- Resultado da operação feita pela ALU
+    f_zero     : out std_logic;                      -- Flag indicadora de resultado igual a zero na operacão da ALU
+    mode       : in std_logic;                       -- Modo de operação: 0 para operação única e 1 para operação vetorial
+    vecSize     : in std_logic_vector(1 downto 0)     -- Tamanho do vetor de operações (usado no modo vetorial)
+    );
+end ALU;
+
+
+architecture TypeArchitecture of ALU is
+
+-- Declaração dos sinais temporários da ALU
+signal resultado_nv : std_logic_vector(31 downto 0); -- Resultado não vetorial
+signal resultado_v  : std_logic_vector(31 downto 0); -- Resultado vetorial
+signal soma_v       : std_logic_vector(31 downto 0); -- Sinal temporário que armazena o resultado final da soma vetorial
+signal sub_v        : std_logic_vector(31 downto 0); -- Sinal temporário que armazena o resultado final da subtração vetorial
+signal shiftL_v     : std_logic_vector(31 downto 0); -- Sinal temporário que armazena o resultado final do Shift Left vetorial
+signal shiftR_v     : std_logic_vector(31 downto 0); -- Sinal temporário que armazena o resultado final da Shift Right vetorial
+
+signal A16_1 : std_logic_vector(15 downto 0);  -- Vetor que contém os bits de índice 31 até 16 do operando quando vecsize=&apos;10&apos; (16 bits)
+signal A16_2 : std_logic_vector(15 downto 0);  -- Vetor que contém os bits de índice 15 até 0 do operando quando vecsize=&apos;10&apos; (16 bits)
+
+signal A8_1 : std_logic_vector(7 downto 0);  -- Vetor que contém os bits de índice 31 até 24 do operando quando vecsize=&apos;01&apos; (8 bits)
+signal A8_2 : std_logic_vector(7 downto 0);  -- Vetor que contém os bits de índice 23 até 16 do operando quando vecsize=&apos;01&apos; (8 bits)
+signal A8_3 : std_logic_vector(7 downto 0);  -- Vetor que contém os bits de índice 15 até 8 do operando quando vecsize=&apos;01&apos; (8 bits)
+signal A8_4 : std_logic_vector(7 downto 0);  -- Vetor que contém os bits de índice 7 até 0 do operando quando vecsize=&apos;01&apos; (8 bits)
+
+signal A4_1 : std_logic_vector(3 downto 0);  -- Vetor que contém os bits de índice 31 até 28 do operando quando vecsize=&apos;00&apos; (4 bits)
+signal A4_2 : std_logic_vector(3 downto 0);  -- Vetor que contém os bits de índice 27 até 24 do operando quando vecsize=&apos;00&apos; (4 bits)
+signal A4_3 : std_logic_vector(3 downto 0);  -- Vetor que contém os bits de índice 23 até 20 do operando quando vecsize=&apos;00&apos; (4 bits)
+signal A4_4 : std_logic_vector(3 downto 0);  -- Vetor que contém os bits de índice 19 até 16 do operando quando vecsize=&apos;00&apos; (4 bits)
+signal A4_5 : std_logic_vector(3 downto 0);  -- Vetor que contém os bits de índice 15 até 12 do operando quando vecsize=&apos;00&apos; (4 bits)
+signal A4_6 : std_logic_vector(3 downto 0);  -- Vetor que contém os bits de índice 11 até 8 do operando quando vecsize=&apos;00&apos; (4 bits)
+signal A4_7 : std_logic_vector(3 downto 0);  -- Vetor que contém os bits de índice 7 até 4 do operando quando vecsize=&apos;00&apos; (4 bits)
+signal A4_8 : std_logic_vector(3 downto 0);  -- Vetor que contém os bits de índice 3 até 0 do operando quando vecsize=&apos;00&apos; (4 bits)
+
+signal integer_B : integer;                  -- Integer do valor binário que entra como operando B
+
+begin
+
+    -- Conversão da entrada B para integer para uso nas operações de deslocamento
+    integer_B &lt;= to_integer(unsigned(B));
+
+    -- Divisão do sinal de entrada A em subvetores para as operações vetoriais
+    A16_1 &lt;= A(31 downto 16);
+    A16_2 &lt;= A(15 downto 0);
+
+    A8_1 &lt;= A(31 downto 24);
+    A8_2 &lt;= A(23 downto 16);
+    A8_3 &lt;= A(15 downto 8);
+    A8_4 &lt;= A(7 downto 0);
+
+    A4_1 &lt;= A(31 downto 28);
+    A4_2 &lt;= A(27 downto 24);
+    A4_3 &lt;= A(23 downto 20);
+    A4_4 &lt;= A(19 downto 16);
+    A4_5 &lt;= A(15 downto 12);
+    A4_6 &lt;= A(11 downto 8);
+    A4_7 &lt;= A(7 downto 4);
+    A4_8 &lt;= A(3 downto 0);
+    
+    
+    -- Cálculos das operações vetoriais com base no tamanho do vetor (vecsize)
+    soma_v &lt;= (A + B) when vecSize = &quot;11&quot; else
+             ((A16_1 + B(31 downto 16)) &amp; (A16_2 + B(15 downto 0))) when vecSize = &quot;10&quot; else
+             ((A8_1 + B(31 downto 24)) &amp; (A8_2 + B(23 downto 16)) &amp; (A8_3 + B(15 downto 8)) &amp; (A8_4 + B(7 downto 0))) when vecSize = &quot;01&quot; else
+             ((A4_1 + B(31 downto 28)) &amp; (A4_2 + B(27 downto 24)) &amp; (A4_3 + B(23 downto 20)) &amp; (A4_4 + B(19 downto 16)) &amp; (A4_5 + B(15 downto 12)) &amp; (A4_6 + B(11 downto 8)) &amp; (A4_7 + B(7 downto 4)) &amp; (A4_8 + B(3 downto 0))) when vecSize = &quot;00&quot;;
+    
+    sub_v &lt;= (A - B) when vecSize = &quot;11&quot; else
+             ((A16_1 - B(31 downto 16)) &amp; (A16_2 - B(15 downto 0))) when vecSize = &quot;10&quot; else
+             ((A8_1 - B(31 downto 24)) &amp; (A8_2 - B(23 downto 16)) &amp; (A8_3 - B(15 downto 8)) &amp; (A8_4 - B(7 downto 0))) when vecSize = &quot;01&quot; else
+             ((A4_1 - B(31 downto 28)) &amp; (A4_2 - B(27 downto 24)) &amp; (A4_3 - B(23 downto 20)) &amp; (A4_4 - B(19 downto 16)) &amp; (A4_5 - B(15 downto 12)) &amp; (A4_6 - B(11 downto 8)) &amp; (A4_7 - B(7 downto 4)) &amp; (A4_8 - B(3 downto 0))) when vecSize = &quot;00&quot;;
+    
+    -- Cálculos das operações de deslocamento vetoriais
+    shiftL_v &lt;= (std_logic_vector(shift_left(unsigned(A), integer_B))) when vecSize = &quot;11&quot; else
+             ((std_logic_vector(shift_left(unsigned(A16_1), integer_B))) &amp; std_logic_vector(shift_left(unsigned(A16_2), integer_B))) when vecSize = &quot;10&quot; else
+             ((std_logic_vector(shift_left(unsigned(A8_1), integer_B))) &amp; (std_logic_vector(shift_left(unsigned(A8_2), integer_B))) &amp; (std_logic_vector(shift_left(unsigned(A8_3), integer_B))) &amp; (std_logic_vector(shift_left(unsigned(A8_4), integer_B)))) when vecSize = &quot;01&quot; else
+             ((std_logic_vector(shift_left(unsigned(A4_1), integer_B))) &amp; (std_logic_vector(shift_left(unsigned(A4_2), integer_B))) &amp; (std_logic_vector(shift_left(unsigned(A4_3), integer_B))) &amp; (std_logic_vector(shift_left(unsigned(A4_4), integer_B))) &amp; (std_logic_vector(shift_left(unsigned(A4_5), integer_B))) &amp; (std_logic_vector(shift_left(unsigned(A4_6), integer_B))) &amp; (std_logic_vector(shift_left(unsigned(A4_7), integer_B))) &amp; (std_logic_vector(shift_left(unsigned(A4_8), integer_B)))) when vecSize = &quot;00&quot;;
+
+    shiftR_v &lt;= (std_logic_vector(shift_right(unsigned(A), integer_B))) when vecSize = &quot;11&quot; else
+             ((std_logic_vector(shift_right(unsigned(A16_1), integer_B))) &amp; std_logic_vector(shift_right(unsigned(A16_2), integer_B))) when vecSize = &quot;10&quot; else
+             ((std_logic_vector(shift_right(unsigned(A8_1), integer_B))) &amp; (std_logic_vector(shift_right(unsigned(A8_2), integer_B))) &amp; (std_logic_vector(shift_right(unsigned(A8_3), integer_B))) &amp; (std_logic_vector(shift_right(unsigned(A8_4), integer_B)))) when vecSize = &quot;01&quot; else
+             ((std_logic_vector(shift_right(unsigned(A4_1), integer_B))) &amp; (std_logic_vector(shift_right(unsigned(A4_2), integer_B))) &amp; (std_logic_vector(shift_right(unsigned(A4_3), integer_B))) &amp; (std_logic_vector(shift_right(unsigned(A4_4), integer_B))) &amp; (std_logic_vector(shift_right(unsigned(A4_5), integer_B))) &amp; (std_logic_vector(shift_right(unsigned(A4_6), integer_B))) &amp; (std_logic_vector(shift_right(unsigned(A4_7), integer_B))) &amp; (std_logic_vector(shift_right(unsigned(A4_8), integer_B)))) when vecSize = &quot;00&quot;;
+    
+
+    -- ALU vetorial (mode = 1) 
+    resultado_v &lt;= soma_v when controle = &quot;0010&quot; else
+                sub_v when controle = &quot;0110&quot; else
+                shiftL_v when controle = &quot;0011&quot; else
+                shiftR_v when controle = &quot;0111&quot; else
+                (others =&gt; &apos;0&apos;);
+    
+    -- ALU não vetorial (mode = 0)
+    resultado_nv &lt;= (A + B) when controle = &quot;0010&quot; else
+                   (A - B) when controle = &quot;0110&quot; else
+                   (A XOR B) when controle = &quot;0101&quot; else
+                   (A OR B) when controle = &quot;0001&quot; else
+                   (A AND B) when controle = &quot;0000&quot; else
+                   (std_logic_vector(shift_left(unsigned(A), integer_B))) when controle = &quot;0011&quot; else
+                   (std_logic_vector(shift_right(unsigned(A), integer_B))) when controle = &quot;0111&quot;;
+    
+    -- Seleção do resultado de acordo com o sinal de controle &quot;mode&quot;
+    resultado &lt;= resultado_nv when mode = &apos;0&apos; else
+                resultado_v when mode = &apos;1&apos;;
+                
+    -- Sinalização se o resultado é zero (serve para o Branch) -&gt; como as operações vetoriais não incluem Branch, basta verificar do resultado não vetorial
+    f_zero &lt;= &apos;1&apos; when resultado_nv = &quot;00000000000000000000000000000000&quot; else &apos;0&apos;;   
+
+end TypeArchitecture;</string>
+        </entry>
+        <entry>
+          <string>externalOutputs</string>
+          <string>resultado:32,f_zero</string>
+        </entry>
+        <entry>
+          <string>Width</string>
+          <int>20</int>
+        </entry>
+      </elementAttributes>
+      <pos x="3320" y="-80"/>
+    </visualElement>
+    <visualElement>
+      <elementName>External</elementName>
+      <elementAttributes>
+        <entry>
+          <string>applicationType</string>
+          <appType>GHDL</appType>
+        </entry>
+        <entry>
+          <string>Label</string>
+          <string>Forward</string>
+        </entry>
+        <entry>
+          <string>externalInputs</string>
+          <string>clk,regWrite_WB,regWrite_MEM,Rs1:5,Rs2:5,Rd_WB:5,Rd_Mem:5</string>
+        </entry>
+        <entry>
+          <string>Code</string>
+          <string>library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+
+entity Forward is 
+    port( 
+         clk                        : IN std_logic;                         
+         regWrite_WB, regWrite_MEM  : IN std_logic;                         
+         Rs1, Rs2                   : IN std_logic_vector(4 downto 0);      
+         Rd_WB, Rd_Mem              : IN std_logic_vector(4 downto 0);      
+         forwardA, forwardB         : OUT std_logic_vector(1 downto 0)      
+     );
+end Forward;
+
+architecture TypeArchitecture of Forward is
+    signal forwardA_interno, forwardB_interno : std_logic_vector(1 downto 0) := &quot;00&quot;;   
+begin
+    process(clk)
+    begin
+        if rising_edge(clk) then
+            forwardA_interno &lt;= &quot;00&quot;;  -- Reset dos sinais internos
+            forwardB_interno &lt;= &quot;00&quot;;
+
+            if ((regWrite_MEM = &apos;1&apos;) and (Rd_Mem /= &quot;00000&quot;) and (Rd_Mem = Rs1)) then
+                forwardA_interno &lt;= &quot;10&quot;;   
+            end if;
+
+            if ((regWrite_MEM = &apos;1&apos;) and (Rd_Mem /= &quot;00000&quot;) and (Rd_Mem = Rs2)) then
+                forwardB_interno &lt;= &quot;10&quot;;  
+            end if;
+
+            if ((regWrite_WB = &apos;1&apos;) and (Rd_WB /= &quot;00000&quot;) and (Rd_WB = Rs1)) then
+                forwardA_interno &lt;= &quot;01&quot;;   
+            end if;
+
+            if ((regWrite_WB = &apos;1&apos;) and (Rd_WB /= &quot;00000&quot;) and (Rd_WB = Rs2)) then
+                forwardB_interno &lt;= &quot;01&quot;;   
+            end if;
+        end if;
+    end process;
+
+    forwardA &lt;= forwardA_interno;  
+    forwardB &lt;= forwardB_interno;
+end TypeArchitecture;</string>
+        </entry>
+        <entry>
+          <string>externalOutputs</string>
+          <string>forwardA:2,forwardB:2</string>
+        </entry>
+        <entry>
+          <string>Width</string>
+          <int>15</int>
+        </entry>
+      </elementAttributes>
+      <pos x="2960" y="640"/>
+    </visualElement>
+    <visualElement>
+      <elementName>External</elementName>
+      <elementAttributes>
+        <entry>
+          <string>applicationType</string>
+          <appType>GHDL</appType>
+        </entry>
+        <entry>
+          <string>Label</string>
+          <string>EXMEM</string>
+        </entry>
+        <entry>
+          <string>externalInputs</string>
+          <string>CLK,Branch_in,MemWrite_in,MemRead_in,RegWrite_in,MemToReg_in,New_PC_in:32,Zero_in,ALUresult_in:32,read2_in:32,Rd_in:5,Jalr_ou_Jal_in</string>
+        </entry>
+        <entry>
+          <string>Code</string>
+          <string>LIBRARY ieee;
+USE ieee.std_logic_1164.all;
+
+ENTITY EXMEM IS
+  PORT (
+    CLK             : IN std_logic;                             -- Entrada do sinal de clock            
+    Branch_in       : IN std_logic;                             -- Entrada do sinal de controle que define quando ocorre Branch
+    MemWrite_in     : IN std_logic;                             -- Entrada do sinal de controle que define quando a Memória será escrita
+    MemRead_in      : IN std_logic;                             -- Entrada do sinal de controle que define quando a Memória será lida
+    RegWrite_in     : IN std_logic;                             -- Entrada do sinal de controle que define quando o registrador será escrito
+    MemToReg_in     : IN std_logic;                             -- Entrada do sinal de controle que define quando um dado será passado da memória para o registrador
+    New_PC_in       : IN std_logic_vector(31 DOWNTO 0);         -- Soma do PC com imediato (jal) ou reg com imediato substituindo PC (jalr)
+    Zero_in         : IN std_logic;                             -- Quando o resultado da ALU foi zero (serve para Branch)
+    ALUresult_in    : IN std_logic_vector(31 DOWNTO 0);         -- Entrada do resultado da operação da ALU
+    read2_in        : IN std_logic_vector(31 DOWNTO 0);         -- Entrada do valor lido do read data 2
+    Rd_in           : IN std_logic_vector(4 DOWNTO 0);          -- Entrada da instrução atual buscada na memória de instruções
+    Jalr_ou_Jal_in	: IN std_logic;					    -- Entrada que indica se é Jalr ou Jal	
+  
+    Branch_out      : out std_logic;                            -- Saída do sinal de controle que define quando ocorre Branch 
+    MemWrite_out    : out std_logic;                            -- Saída do sinal de controle que define quando a Memória será escrita
+    MemRead_out     : out std_logic;                            -- Saída do sinal de controle que define quando a Memória será lida
+    RegWrite_out    : out std_logic;                            -- Saída do sinal de controle que define quando o registrador será escrito
+    MemToReg_out    : out std_logic;                            -- Saída do sinal de controle que define quando um dado será passado da memória para o registrador
+    New_PC_out       : out std_logic_vector(31 DOWNTO 0);        -- Soma do PC com imediato (jal) ou reg com imediato substituindo PC (jalr)
+    Zero_out        : out std_logic;                            -- Quando o resultado da ALU foi zero (serve para Branch)
+    ALUresult_out   : out std_logic_vector(31 DOWNTO 0);        -- Saída do resultado da operação da ALU
+    read2_out       : out std_logic_vector(31 DOWNTO 0);        -- Saída do valor lido do read data 2
+    Rd_out          : out std_logic_vector(4 DOWNTO 0);          -- Saída da instrução atual buscada na memória de instruções
+    Jalr_ou_Jal_out	: out std_logic					    -- Saída que indica se é Jalr ou Jal
+    );
+END EXMEM;
+
+
+ARCHITECTURE TypeArchitecture OF EXMEM IS
+
+SIGNAL exmem_sig : std_logic_vector(107 DOWNTO 0);  -- Registrador de 192 bits para armazenar os valores do EXMEM
+
+BEGIN
+
+    PROCESS (CLK)
+    BEGIN
+        IF (rising_edge(CLK)) THEN                   -- Detecta a borda de subida do sinal de clock
+            exmem_sig(0)    &lt;= Branch_in;          
+            exmem_sig(1)    &lt;= MemWrite_in;          
+            exmem_sig(2)   &lt;= MemRead_in;      
+            exmem_sig(3)   &lt;= RegWrite_in;
+            exmem_sig(4)   &lt;= MemToReg_in;  
+            exmem_sig(36 downto 5)    &lt;= New_PC_in;       
+            exmem_sig(37)           &lt;= Zero_in;   
+            exmem_sig(69 downto 38)    &lt;= ALUresult_in;   
+            exmem_sig(101 downto 70)    &lt;= read2_in;   
+            exmem_sig(106 downto 102)    &lt;= Rd_in;   
+            exmem_sig(107) &lt;= Jalr_ou_Jal_in;
+        END IF;
+        IF (falling_edge(CLK)) THEN                 -- Detecta a borda de descida do sinal de clock
+            Branch_out    &lt;= exmem_sig(0);       
+            MemWrite_out  &lt;= exmem_sig(1);     
+            MemRead_out  &lt;= exmem_sig(2);      
+            RegWrite_out &lt;= exmem_sig(3);    
+            MemToReg_out &lt;= exmem_sig(4);
+            New_PC_out &lt;= exmem_sig(36 downto 5);
+            Zero_out &lt;= exmem_sig(37);
+            ALUresult_out &lt;= exmem_sig(69 downto 38);
+            read2_out &lt;= exmem_sig(101 downto 70);
+            Rd_out &lt;= exmem_sig(106 downto 102);
+            Jalr_ou_Jal_out &lt;= exmem_sig(107);
+        END IF;
+    END PROCESS;
+
+    
+END TypeArchitecture;</string>
+        </entry>
+        <entry>
+          <string>externalOutputs</string>
+          <string>Branch_out,MemWrite_out,MemRead_out,RegWrite_out,MemToReg_out,New_PC_out:32,Zero_out,ALUresult_out:32,read2_out:32,Rd_out:5,Jalr_ou_Jal_out</string>
+        </entry>
+        <entry>
+          <string>Width</string>
+          <int>16</int>
+        </entry>
+      </elementAttributes>
+      <pos x="4280" y="-20"/>
+    </visualElement>
+    <visualElement>
+      <elementName>External</elementName>
+      <elementAttributes>
+        <entry>
+          <string>applicationType</string>
+          <appType>GHDL</appType>
+        </entry>
+        <entry>
+          <string>Label</string>
+          <string>MEMWB</string>
+        </entry>
+        <entry>
+          <string>externalInputs</string>
+          <string>CLK,RegWrite_in,MemToReg_in,Mem_data_in:32,ALUresult_in:32,Rd_in:5</string>
+        </entry>
+        <entry>
+          <string>Width</string>
+          <int>16</int>
+        </entry>
+        <entry>
+          <string>Code</string>
+          <string>LIBRARY ieee;
+USE ieee.std_logic_1164.all;
+
+ENTITY MEMWB IS
+  PORT (
+    CLK             : IN std_logic;                             -- Entrada do sinal de clock            
+    RegWrite_in     : IN std_logic;                             -- Entrada do sinal de controle que define quando o registrador será escrito
+    MemToReg_in     : IN std_logic;                             -- Entrada do sinal de controle que define quando um dado será passado da memória para o registrador
+    Mem_data_in     : IN std_logic_vector(31 DOWNTO 0);         -- Entrada do valor lido na memória
+    ALUresult_in    : IN std_logic_vector(31 DOWNTO 0);         -- Entrada do resultado da operação da ALU
+    Rd_in           : IN std_logic_vector(4 DOWNTO 0);          -- Entrada da instrução atual buscada na memória de instruções
+  
+    RegWrite_out    : out std_logic;                            -- Saída do sinal de controle que define quando o registrador será escrito
+    MemToReg_out    : out std_logic;                            -- Saída do sinal de controle que define quando um dado será passado da memória para o registrador
+    Mem_data_out    : out std_logic_vector(31 DOWNTO 0);        -- Saída do valor lido na memória
+    ALUresult_out   : out std_logic_vector(31 DOWNTO 0);        -- Saída do resultado da operação da ALU
+    Rd_out          : out std_logic_vector(4 DOWNTO 0)          -- Saída da instrução atual buscada na memória de instruções
+    );
+END MEMWB;
+
+
+ARCHITECTURE TypeArchitecture OF MEMWB IS
+
+SIGNAL memwb_sig : std_logic_vector(70 DOWNTO 0);  -- Registrador de 70 bits para armazenar os valores do memwb
+
+BEGIN
+
+    PROCESS (CLK)
+    BEGIN
+        IF (rising_edge(CLK)) THEN                   -- Detecta a borda de subida do sinal de clock     
+            memwb_sig(0)   &lt;= RegWrite_in;
+            memwb_sig(1)   &lt;= MemToReg_in;  
+            memwb_sig(33 downto 2)  &lt;= Mem_data_in ;       
+            memwb_sig(65 downto 34)  &lt;= ALUresult_in;   
+            memwb_sig(70 downto 66)  &lt;= Rd_in;   
+        END IF;
+        IF (falling_edge(CLK)) THEN                 -- Detecta a borda de descida do sinal de clock
+            RegWrite_out &lt;= memwb_sig(0);    
+            MemToReg_out &lt;= memwb_sig(1);
+            Mem_data_out &lt;= memwb_sig(33 downto 2);
+            ALUresult_out &lt;= memwb_sig(65 downto 34);
+            Rd_out &lt;= memwb_sig(70 downto 66);
+        END IF;
+    END PROCESS;
+
+    
+END TypeArchitecture;</string>
+        </entry>
+        <entry>
+          <string>externalOutputs</string>
+          <string>RegWrite_out,MemToReg_out,Mem_data_out:32,ALUresult_out:32,Rd_out:5</string>
+        </entry>
+      </elementAttributes>
+      <pos x="5600" y="100"/>
+    </visualElement>
+    <visualElement>
+      <elementName>ROM</elementName>
+      <elementAttributes>
+        <entry>
+          <string>AddrBits</string>
+          <int>24</int>
+        </entry>
+        <entry>
+          <string>Label</string>
+          <string>ROM</string>
+        </entry>
+        <entry>
+          <string>Bits</string>
+          <int>32</int>
+        </entry>
+      </elementAttributes>
+      <pos x="-80" y="60"/>
+    </visualElement>
+    <visualElement>
+      <elementName>RAMDualPort</elementName>
+      <elementAttributes>
+        <entry>
+          <string>AddrBits</string>
+          <int>24</int>
+        </entry>
+        <entry>
+          <string>Bits</string>
+          <int>32</int>
+        </entry>
+      </elementAttributes>
+      <pos x="5220" y="120"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Clock</elementName>
+      <elementAttributes>
+        <entry>
+          <string>runRealTime</string>
+          <boolean>true</boolean>
+        </entry>
+      </elementAttributes>
+      <pos x="-700" y="-60"/>
+    </visualElement>
+    <visualElement>
+      <elementName>In</elementName>
+      <elementAttributes/>
+      <pos x="-640" y="40"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Multiplexer</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Bits</string>
+          <int>32</int>
+        </entry>
+      </elementAttributes>
+      <pos x="-700" y="100"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Splitter</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Input Splitting</string>
+          <string>32</string>
+        </entry>
+        <entry>
+          <string>Output Splitting</string>
+          <string>0-23</string>
+        </entry>
+      </elementAttributes>
+      <pos x="-220" y="60"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Const</elementName>
+      <elementAttributes/>
+      <pos x="-140" y="100"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Not</elementName>
+      <elementAttributes>
+        <entry>
+          <string>rotation</string>
+          <rotation rotation="2"/>
+        </entry>
+      </elementAttributes>
+      <pos x="320" y="-480"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Multiplexer</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Bits</string>
+          <int>32</int>
+        </entry>
+      </elementAttributes>
+      <pos x="2060" y="180"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Multiplexer</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Bits</string>
+          <int>32</int>
+        </entry>
+      </elementAttributes>
+      <pos x="2220" y="200"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Multiplexer</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Bits</string>
+          <int>32</int>
+        </entry>
+      </elementAttributes>
+      <pos x="2200" y="120"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Multiplexer</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Bits</string>
+          <int>32</int>
+        </entry>
+      </elementAttributes>
+      <pos x="2360" y="-180"/>
+    </visualElement>
+    <visualElement>
+      <elementName>And</elementName>
+      <elementAttributes>
+        <entry>
+          <string>wideShape</string>
+          <boolean>true</boolean>
+        </entry>
+        <entry>
+          <string>inverterConfig</string>
+          <inverterConfig>
+            <string>In_1</string>
+          </inverterConfig>
+        </entry>
+      </elementAttributes>
+      <pos x="1940" y="-260"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Const</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Bits</string>
+          <int>32</int>
+        </entry>
+      </elementAttributes>
+      <pos x="2180" y="240"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Multiplexer</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Selector Bits</string>
+          <int>2</int>
+        </entry>
+        <entry>
+          <string>rotation</string>
+          <rotation rotation="1"/>
+        </entry>
+        <entry>
+          <string>Bits</string>
+          <int>32</int>
+        </entry>
+      </elementAttributes>
+      <pos x="3060" y="60"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Multiplexer</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Selector Bits</string>
+          <int>2</int>
+        </entry>
+        <entry>
+          <string>rotation</string>
+          <rotation rotation="1"/>
+        </entry>
+        <entry>
+          <string>Bits</string>
+          <int>32</int>
+        </entry>
+      </elementAttributes>
+      <pos x="3200" y="60"/>
+    </visualElement>
+    <visualElement>
+      <elementName>And</elementName>
+      <elementAttributes>
+        <entry>
+          <string>wideShape</string>
+          <boolean>true</boolean>
+        </entry>
+      </elementAttributes>
+      <pos x="3940" y="100"/>
+    </visualElement>
+    <visualElement>
+      <elementName>And</elementName>
+      <elementAttributes>
+        <entry>
+          <string>wideShape</string>
+          <boolean>true</boolean>
+        </entry>
+      </elementAttributes>
+      <pos x="4740" y="-220"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Or</elementName>
+      <elementAttributes>
+        <entry>
+          <string>wideShape</string>
+          <boolean>true</boolean>
+        </entry>
+      </elementAttributes>
+      <pos x="4860" y="-200"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Splitter</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Input Splitting</string>
+          <string>32</string>
+        </entry>
+        <entry>
+          <string>Output Splitting</string>
+          <string>0-23</string>
+        </entry>
+      </elementAttributes>
+      <pos x="5040" y="120"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Multiplexer</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Bits</string>
+          <int>32</int>
+        </entry>
+        <entry>
+          <string>flipSelPos</string>
+          <boolean>true</boolean>
+        </entry>
+      </elementAttributes>
+      <pos x="6120" y="140"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Const</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Bits</string>
+          <int>32</int>
+        </entry>
+      </elementAttributes>
+      <pos x="3420" y="140"/>
+    </visualElement>
+  </visualElements>
+  <wires>
+    <wire>
+      <p1 x="6000" y="140"/>
+      <p2 x="6060" y="180"/>
+    </wire>
+    <wire>
+      <p1 x="6060" y="140"/>
+      <p2 x="6020" y="160"/>
+    </wire>
+    <wire>
+      <p1 x="60" y="0"/>
+      <p2 x="140" y="0"/>
+    </wire>
+    <wire>
+      <p1 x="340" y="0"/>
+      <p2 x="940" y="0"/>
+    </wire>
+    <wire>
+      <p1 x="1060" y="0"/>
+      <p2 x="1320" y="0"/>
+    </wire>
+    <wire>
+      <p1 x="1640" y="0"/>
+      <p2 x="1940" y="0"/>
+    </wire>
+    <wire>
+      <p1 x="1960" y="0"/>
+      <p2 x="1980" y="0"/>
+    </wire>
+    <wire>
+      <p1 x="2620" y="0"/>
+      <p2 x="3320" y="0"/>
+    </wire>
+    <wire>
+      <p1 x="4040" y="0"/>
+      <p2 x="4280" y="0"/>
+    </wire>
+    <wire>
+      <p1 x="4600" y="0"/>
+      <p2 x="4720" y="0"/>
+    </wire>
+    <wire>
+      <p1 x="2940" y="640"/>
+      <p2 x="2960" y="640"/>
+    </wire>
+    <wire>
+      <p1 x="3260" y="640"/>
+      <p2 x="3280" y="640"/>
+    </wire>
+    <wire>
+      <p1 x="1800" y="-260"/>
+      <p2 x="1900" y="-260"/>
+    </wire>
+    <wire>
+      <p1 x="940" y="-260"/>
+      <p2 x="980" y="-260"/>
+    </wire>
+    <wire>
+      <p1 x="1900" y="-260"/>
+      <p2 x="1920" y="-260"/>
+    </wire>
+    <wire>
+      <p1 x="1020" y="260"/>
+      <p2 x="1320" y="260"/>
+    </wire>
+    <wire>
+      <p1 x="2120" y="260"/>
+      <p2 x="2240" y="260"/>
+    </wire>
+    <wire>
+      <p1 x="1640" y="260"/>
+      <p2 x="1820" y="260"/>
+    </wire>
+    <wire>
+      <p1 x="440" y="900"/>
+      <p2 x="2900" y="900"/>
+    </wire>
+    <wire>
+      <p1 x="2900" y="900"/>
+      <p2 x="6300" y="900"/>
+    </wire>
+    <wire>
+      <p1 x="620" y="520"/>
+      <p2 x="1880" y="520"/>
+    </wire>
+    <wire>
+      <p1 x="3100" y="520"/>
+      <p2 x="3240" y="520"/>
+    </wire>
+    <wire>
+      <p1 x="3240" y="520"/>
+      <p2 x="4840" y="520"/>
+    </wire>
+    <wire>
+      <p1 x="1840" y="-140"/>
+      <p2 x="2360" y="-140"/>
+    </wire>
+    <wire>
+      <p1 x="2780" y="-140"/>
+      <p2 x="4240" y="-140"/>
+    </wire>
+    <wire>
+      <p1 x="1100" y="140"/>
+      <p2 x="1320" y="140"/>
+    </wire>
+    <wire>
+      <p1 x="2240" y="140"/>
+      <p2 x="3060" y="140"/>
+    </wire>
+    <wire>
+      <p1 x="3920" y="140"/>
+      <p2 x="3940" y="140"/>
+    </wire>
+    <wire>
+      <p1 x="1640" y="140"/>
+      <p2 x="1720" y="140"/>
+    </wire>
+    <wire>
+      <p1 x="4220" y="140"/>
+      <p2 x="4280" y="140"/>
+    </wire>
+    <wire>
+      <p1 x="4600" y="140"/>
+      <p2 x="5220" y="140"/>
+    </wire>
+    <wire>
+      <p1 x="5560" y="140"/>
+      <p2 x="5600" y="140"/>
+    </wire>
+    <wire>
+      <p1 x="5920" y="140"/>
+      <p2 x="6000" y="140"/>
+    </wire>
+    <wire>
+      <p1 x="6060" y="140"/>
+      <p2 x="6120" y="140"/>
+    </wire>
+    <wire>
+      <p1 x="440" y="140"/>
+      <p2 x="620" y="140"/>
+    </wire>
+    <wire>
+      <p1 x="-820" y="140"/>
+      <p2 x="-700" y="140"/>
+    </wire>
+    <wire>
+      <p1 x="940" y="-400"/>
+      <p2 x="1160" y="-400"/>
+    </wire>
+    <wire>
+      <p1 x="860" y="400"/>
+      <p2 x="960" y="400"/>
+    </wire>
+    <wire>
+      <p1 x="620" y="400"/>
+      <p2 x="660" y="400"/>
+    </wire>
+    <wire>
+      <p1 x="1760" y="400"/>
+      <p2 x="4080" y="400"/>
+    </wire>
+    <wire>
+      <p1 x="-500" y="-20"/>
+      <p2 x="0" y="-20"/>
+    </wire>
+    <wire>
+      <p1 x="1200" y="-20"/>
+      <p2 x="1320" y="-20"/>
+    </wire>
+    <wire>
+      <p1 x="1640" y="-20"/>
+      <p2 x="1980" y="-20"/>
+    </wire>
+    <wire>
+      <p1 x="2380" y="-20"/>
+      <p2 x="2400" y="-20"/>
+    </wire>
+    <wire>
+      <p1 x="2600" y="-20"/>
+      <p2 x="3320" y="-20"/>
+    </wire>
+    <wire>
+      <p1 x="4260" y="-20"/>
+      <p2 x="4280" y="-20"/>
+    </wire>
+    <wire>
+      <p1 x="-520" y="20"/>
+      <p2 x="-480" y="20"/>
+    </wire>
+    <wire>
+      <p1 x="40" y="20"/>
+      <p2 x="140" y="20"/>
+    </wire>
+    <wire>
+      <p1 x="1040" y="20"/>
+      <p2 x="1320" y="20"/>
+    </wire>
+    <wire>
+      <p1 x="1920" y="20"/>
+      <p2 x="1980" y="20"/>
+    </wire>
+    <wire>
+      <p1 x="1640" y="20"/>
+      <p2 x="1860" y="20"/>
+    </wire>
+    <wire>
+      <p1 x="4060" y="20"/>
+      <p2 x="4280" y="20"/>
+    </wire>
+    <wire>
+      <p1 x="4600" y="20"/>
+      <p2 x="5140" y="20"/>
+    </wire>
+    <wire>
+      <p1 x="340" y="20"/>
+      <p2 x="360" y="20"/>
+    </wire>
+    <wire>
+      <p1 x="3260" y="660"/>
+      <p2 x="3300" y="660"/>
+    </wire>
+    <wire>
+      <p1 x="4700" y="660"/>
+      <p2 x="5940" y="660"/>
+    </wire>
+    <wire>
+      <p1 x="2900" y="660"/>
+      <p2 x="2960" y="660"/>
+    </wire>
+    <wire>
+      <p1 x="940" y="-280"/>
+      <p2 x="1000" y="-280"/>
+    </wire>
+    <wire>
+      <p1 x="1000" y="280"/>
+      <p2 x="1320" y="280"/>
+    </wire>
+    <wire>
+      <p1 x="1900" y="280"/>
+      <p2 x="2080" y="280"/>
+    </wire>
+    <wire>
+      <p1 x="1640" y="280"/>
+      <p2 x="1860" y="280"/>
+    </wire>
+    <wire>
+      <p1 x="460" y="540"/>
+      <p2 x="960" y="540"/>
+    </wire>
+    <wire>
+      <p1 x="980" y="540"/>
+      <p2 x="3080" y="540"/>
+    </wire>
+    <wire>
+      <p1 x="3220" y="540"/>
+      <p2 x="6220" y="540"/>
+    </wire>
+    <wire>
+      <p1 x="3080" y="540"/>
+      <p2 x="3220" y="540"/>
+    </wire>
+    <wire>
+      <p1 x="2400" y="-160"/>
+      <p2 x="2600" y="-160"/>
+    </wire>
+    <wire>
+      <p1 x="600" y="160"/>
+      <p2 x="620" y="160"/>
+    </wire>
+    <wire>
+      <p1 x="1080" y="160"/>
+      <p2 x="1320" y="160"/>
+    </wire>
+    <wire>
+      <p1 x="1640" y="160"/>
+      <p2 x="1840" y="160"/>
+    </wire>
+    <wire>
+      <p1 x="2180" y="160"/>
+      <p2 x="2200" y="160"/>
+    </wire>
+    <wire>
+      <p1 x="4140" y="160"/>
+      <p2 x="4280" y="160"/>
+    </wire>
+    <wire>
+      <p1 x="4720" y="160"/>
+      <p2 x="5220" y="160"/>
+    </wire>
+    <wire>
+      <p1 x="5280" y="160"/>
+      <p2 x="5600" y="160"/>
+    </wire>
+    <wire>
+      <p1 x="4600" y="160"/>
+      <p2 x="4680" y="160"/>
+    </wire>
+    <wire>
+      <p1 x="5920" y="160"/>
+      <p2 x="6020" y="160"/>
+    </wire>
+    <wire>
+      <p1 x="6160" y="160"/>
+      <p2 x="6220" y="160"/>
+    </wire>
+    <wire>
+      <p1 x="1840" y="160"/>
+      <p2 x="2160" y="160"/>
+    </wire>
+    <wire>
+      <p1 x="2940" y="800"/>
+      <p2 x="4680" y="800"/>
+    </wire>
+    <wire>
+      <p1 x="940" y="-420"/>
+      <p2 x="1140" y="-420"/>
+    </wire>
+    <wire>
+      <p1 x="520" y="420"/>
+      <p2 x="660" y="420"/>
+    </wire>
+    <wire>
+      <p1 x="1740" y="420"/>
+      <p2 x="4100" y="420"/>
+    </wire>
+    <wire>
+      <p1 x="-300" y="-40"/>
+      <p2 x="40" y="-40"/>
+    </wire>
+    <wire>
+      <p1 x="1220" y="-40"/>
+      <p2 x="1320" y="-40"/>
+    </wire>
+    <wire>
+      <p1 x="1940" y="-40"/>
+      <p2 x="1980" y="-40"/>
+    </wire>
+    <wire>
+      <p1 x="1640" y="-40"/>
+      <p2 x="1920" y="-40"/>
+    </wire>
+    <wire>
+      <p1 x="2380" y="-40"/>
+      <p2 x="3320" y="-40"/>
+    </wire>
+    <wire>
+      <p1 x="-640" y="40"/>
+      <p2 x="-480" y="40"/>
+    </wire>
+    <wire>
+      <p1 x="340" y="40"/>
+      <p2 x="480" y="40"/>
+    </wire>
+    <wire>
+      <p1 x="940" y="40"/>
+      <p2 x="1320" y="40"/>
+    </wire>
+    <wire>
+      <p1 x="1640" y="40"/>
+      <p2 x="1880" y="40"/>
+    </wire>
+    <wire>
+      <p1 x="3140" y="40"/>
+      <p2 x="3160" y="40"/>
+    </wire>
+    <wire>
+      <p1 x="3280" y="40"/>
+      <p2 x="3300" y="40"/>
+    </wire>
+    <wire>
+      <p1 x="4080" y="40"/>
+      <p2 x="4280" y="40"/>
+    </wire>
+    <wire>
+      <p1 x="4600" y="40"/>
+      <p2 x="4700" y="40"/>
+    </wire>
+    <wire>
+      <p1 x="80" y="40"/>
+      <p2 x="140" y="40"/>
+    </wire>
+    <wire>
+      <p1 x="4700" y="40"/>
+      <p2 x="5580" y="40"/>
+    </wire>
+    <wire>
+      <p1 x="1880" y="40"/>
+      <p2 x="2140" y="40"/>
+    </wire>
+    <wire>
+      <p1 x="2880" y="680"/>
+      <p2 x="2960" y="680"/>
+    </wire>
+    <wire>
+      <p1 x="940" y="-300"/>
+      <p2 x="1020" y="-300"/>
+    </wire>
+    <wire>
+      <p1 x="520" y="300"/>
+      <p2 x="1320" y="300"/>
+    </wire>
+    <wire>
+      <p1 x="1640" y="300"/>
+      <p2 x="1840" y="300"/>
+    </wire>
+    <wire>
+      <p1 x="580" y="560"/>
+      <p2 x="980" y="560"/>
+    </wire>
+    <wire>
+      <p1 x="2880" y="560"/>
+      <p2 x="4700" y="560"/>
+    </wire>
+    <wire>
+      <p1 x="1860" y="-180"/>
+      <p2 x="2360" y="-180"/>
+    </wire>
+    <wire>
+      <p1 x="4940" y="-180"/>
+      <p2 x="4980" y="-180"/>
+    </wire>
+    <wire>
+      <p1 x="-720" y="180"/>
+      <p2 x="-300" y="180"/>
+    </wire>
+    <wire>
+      <p1 x="1060" y="180"/>
+      <p2 x="1320" y="180"/>
+    </wire>
+    <wire>
+      <p1 x="1640" y="180"/>
+      <p2 x="1980" y="180"/>
+    </wire>
+    <wire>
+      <p1 x="2140" y="180"/>
+      <p2 x="2220" y="180"/>
+    </wire>
+    <wire>
+      <p1 x="4160" y="180"/>
+      <p2 x="4280" y="180"/>
+    </wire>
+    <wire>
+      <p1 x="4600" y="180"/>
+      <p2 x="4860" y="180"/>
+    </wire>
+    <wire>
+      <p1 x="5160" y="180"/>
+      <p2 x="5220" y="180"/>
+    </wire>
+    <wire>
+      <p1 x="5540" y="180"/>
+      <p2 x="5600" y="180"/>
+    </wire>
+    <wire>
+      <p1 x="6060" y="180"/>
+      <p2 x="6120" y="180"/>
+    </wire>
+    <wire>
+      <p1 x="5920" y="180"/>
+      <p2 x="5940" y="180"/>
+    </wire>
+    <wire>
+      <p1 x="1980" y="180"/>
+      <p2 x="2060" y="180"/>
+    </wire>
+    <wire>
+      <p1 x="940" y="-440"/>
+      <p2 x="1120" y="-440"/>
+    </wire>
+    <wire>
+      <p1 x="500" y="440"/>
+      <p2 x="660" y="440"/>
+    </wire>
+    <wire>
+      <p1 x="1720" y="440"/>
+      <p2 x="4120" y="440"/>
+    </wire>
+    <wire>
+      <p1 x="1640" y="-60"/>
+      <p2 x="1800" y="-60"/>
+    </wire>
+    <wire>
+      <p1 x="3240" y="-60"/>
+      <p2 x="3320" y="-60"/>
+    </wire>
+    <wire>
+      <p1 x="3720" y="-60"/>
+      <p2 x="3760" y="-60"/>
+    </wire>
+    <wire>
+      <p1 x="-700" y="-60"/>
+      <p2 x="-520" y="-60"/>
+    </wire>
+    <wire>
+      <p1 x="600" y="-60"/>
+      <p2 x="1300" y="-60"/>
+    </wire>
+    <wire>
+      <p1 x="60" y="-60"/>
+      <p2 x="600" y="-60"/>
+    </wire>
+    <wire>
+      <p1 x="1300" y="-60"/>
+      <p2 x="1320" y="-60"/>
+    </wire>
+    <wire>
+      <p1 x="-520" y="-60"/>
+      <p2 x="60" y="-60"/>
+    </wire>
+    <wire>
+      <p1 x="1300" y="-700"/>
+      <p2 x="2940" y="-700"/>
+    </wire>
+    <wire>
+      <p1 x="5160" y="-700"/>
+      <p2 x="5600" y="-700"/>
+    </wire>
+    <wire>
+      <p1 x="4260" y="-700"/>
+      <p2 x="5160" y="-700"/>
+    </wire>
+    <wire>
+      <p1 x="2940" y="-700"/>
+      <p2 x="4260" y="-700"/>
+    </wire>
+    <wire>
+      <p1 x="-380" y="60"/>
+      <p2 x="-300" y="60"/>
+    </wire>
+    <wire>
+      <p1 x="-200" y="60"/>
+      <p2 x="-80" y="60"/>
+    </wire>
+    <wire>
+      <p1 x="0" y="60"/>
+      <p2 x="120" y="60"/>
+    </wire>
+    <wire>
+      <p1 x="340" y="60"/>
+      <p2 x="520" y="60"/>
+    </wire>
+    <wire>
+      <p1 x="920" y="60"/>
+      <p2 x="1060" y="60"/>
+    </wire>
+    <wire>
+      <p1 x="1180" y="60"/>
+      <p2 x="1320" y="60"/>
+    </wire>
+    <wire>
+      <p1 x="1860" y="60"/>
+      <p2 x="2180" y="60"/>
+    </wire>
+    <wire>
+      <p1 x="1640" y="60"/>
+      <p2 x="1800" y="60"/>
+    </wire>
+    <wire>
+      <p1 x="4100" y="60"/>
+      <p2 x="4280" y="60"/>
+    </wire>
+    <wire>
+      <p1 x="4600" y="60"/>
+      <p2 x="5560" y="60"/>
+    </wire>
+    <wire>
+      <p1 x="-300" y="60"/>
+      <p2 x="-220" y="60"/>
+    </wire>
+    <wire>
+      <p1 x="120" y="60"/>
+      <p2 x="140" y="60"/>
+    </wire>
+    <wire>
+      <p1 x="520" y="60"/>
+      <p2 x="620" y="60"/>
+    </wire>
+    <wire>
+      <p1 x="1860" y="700"/>
+      <p2 x="2960" y="700"/>
+    </wire>
+    <wire>
+      <p1 x="940" y="-320"/>
+      <p2 x="1060" y="-320"/>
+    </wire>
+    <wire>
+      <p1 x="500" y="320"/>
+      <p2 x="1320" y="320"/>
+    </wire>
+    <wire>
+      <p1 x="1640" y="320"/>
+      <p2 x="2600" y="320"/>
+    </wire>
+    <wire>
+      <p1 x="4820" y="-200"/>
+      <p2 x="4860" y="-200"/>
+    </wire>
+    <wire>
+      <p1 x="1040" y="200"/>
+      <p2 x="1320" y="200"/>
+    </wire>
+    <wire>
+      <p1 x="1640" y="200"/>
+      <p2 x="2040" y="200"/>
+    </wire>
+    <wire>
+      <p1 x="2100" y="200"/>
+      <p2 x="2220" y="200"/>
+    </wire>
+    <wire>
+      <p1 x="4180" y="200"/>
+      <p2 x="4280" y="200"/>
+    </wire>
+    <wire>
+      <p1 x="5140" y="200"/>
+      <p2 x="5220" y="200"/>
+    </wire>
+    <wire>
+      <p1 x="5580" y="200"/>
+      <p2 x="5600" y="200"/>
+    </wire>
+    <wire>
+      <p1 x="2920" y="840"/>
+      <p2 x="4700" y="840"/>
+    </wire>
+    <wire>
+      <p1 x="940" y="-460"/>
+      <p2 x="1080" y="-460"/>
+    </wire>
+    <wire>
+      <p1 x="1980" y="460"/>
+      <p2 x="4140" y="460"/>
+    </wire>
+    <wire>
+      <p1 x="3100" y="-80"/>
+      <p2 x="3320" y="-80"/>
+    </wire>
+    <wire>
+      <p1 x="3720" y="-80"/>
+      <p2 x="4020" y="-80"/>
+    </wire>
+    <wire>
+      <p1 x="-600" y="80"/>
+      <p2 x="-480" y="80"/>
+    </wire>
+    <wire>
+      <p1 x="-20" y="80"/>
+      <p2 x="140" y="80"/>
+    </wire>
+    <wire>
+      <p1 x="340" y="80"/>
+      <p2 x="500" y="80"/>
+    </wire>
+    <wire>
+      <p1 x="920" y="80"/>
+      <p2 x="1040" y="80"/>
+    </wire>
+    <wire>
+      <p1 x="1160" y="80"/>
+      <p2 x="1320" y="80"/>
+    </wire>
+    <wire>
+      <p1 x="2040" y="80"/>
+      <p2 x="2580" y="80"/>
+    </wire>
+    <wire>
+      <p1 x="1640" y="80"/>
+      <p2 x="1780" y="80"/>
+    </wire>
+    <wire>
+      <p1 x="4120" y="80"/>
+      <p2 x="4280" y="80"/>
+    </wire>
+    <wire>
+      <p1 x="4600" y="80"/>
+      <p2 x="4620" y="80"/>
+    </wire>
+    <wire>
+      <p1 x="500" y="80"/>
+      <p2 x="620" y="80"/>
+    </wire>
+    <wire>
+      <p1 x="1840" y="720"/>
+      <p2 x="2960" y="720"/>
+    </wire>
+    <wire>
+      <p1 x="940" y="-340"/>
+      <p2 x="1040" y="-340"/>
+    </wire>
+    <wire>
+      <p1 x="980" y="340"/>
+      <p2 x="1320" y="340"/>
+    </wire>
+    <wire>
+      <p1 x="1640" y="340"/>
+      <p2 x="2620" y="340"/>
+    </wire>
+    <wire>
+      <p1 x="4680" y="600"/>
+      <p2 x="5580" y="600"/>
+    </wire>
+    <wire>
+      <p1 x="1880" y="-220"/>
+      <p2 x="1940" y="-220"/>
+    </wire>
+    <wire>
+      <p1 x="4600" y="-220"/>
+      <p2 x="4740" y="-220"/>
+    </wire>
+    <wire>
+      <p1 x="-820" y="-860"/>
+      <p2 x="4620" y="-860"/>
+    </wire>
+    <wire>
+      <p1 x="480" y="220"/>
+      <p2 x="660" y="220"/>
+    </wire>
+    <wire>
+      <p1 x="860" y="220"/>
+      <p2 x="1320" y="220"/>
+    </wire>
+    <wire>
+      <p1 x="2040" y="220"/>
+      <p2 x="2060" y="220"/>
+    </wire>
+    <wire>
+      <p1 x="1640" y="220"/>
+      <p2 x="1880" y="220"/>
+    </wire>
+    <wire>
+      <p1 x="2260" y="220"/>
+      <p2 x="3200" y="220"/>
+    </wire>
+    <wire>
+      <p1 x="-680" y="220"/>
+      <p2 x="-560" y="220"/>
+    </wire>
+    <wire>
+      <p1 x="120" y="-480"/>
+      <p2 x="280" y="-480"/>
+    </wire>
+    <wire>
+      <p1 x="320" y="-480"/>
+      <p2 x="460" y="-480"/>
+    </wire>
+    <wire>
+      <p1 x="940" y="-480"/>
+      <p2 x="1100" y="-480"/>
+    </wire>
+    <wire>
+      <p1 x="460" y="-480"/>
+      <p2 x="620" y="-480"/>
+    </wire>
+    <wire>
+      <p1 x="1880" y="480"/>
+      <p2 x="4160" y="480"/>
+    </wire>
+    <wire>
+      <p1 x="80" y="-100"/>
+      <p2 x="360" y="-100"/>
+    </wire>
+    <wire>
+      <p1 x="5920" y="100"/>
+      <p2 x="6300" y="100"/>
+    </wire>
+    <wire>
+      <p1 x="-720" y="100"/>
+      <p2 x="-700" y="100"/>
+    </wire>
+    <wire>
+      <p1 x="-140" y="100"/>
+      <p2 x="-80" y="100"/>
+    </wire>
+    <wire>
+      <p1 x="-500" y="100"/>
+      <p2 x="-480" y="100"/>
+    </wire>
+    <wire>
+      <p1 x="340" y="100"/>
+      <p2 x="540" y="100"/>
+    </wire>
+    <wire>
+      <p1 x="1140" y="100"/>
+      <p2 x="1320" y="100"/>
+    </wire>
+    <wire>
+      <p1 x="560" y="100"/>
+      <p2 x="620" y="100"/>
+    </wire>
+    <wire>
+      <p1 x="3760" y="100"/>
+      <p2 x="3940" y="100"/>
+    </wire>
+    <wire>
+      <p1 x="1640" y="100"/>
+      <p2 x="1680" y="100"/>
+    </wire>
+    <wire>
+      <p1 x="4240" y="100"/>
+      <p2 x="4280" y="100"/>
+    </wire>
+    <wire>
+      <p1 x="4020" y="100"/>
+      <p2 x="4220" y="100"/>
+    </wire>
+    <wire>
+      <p1 x="4600" y="100"/>
+      <p2 x="4740" y="100"/>
+    </wire>
+    <wire>
+      <p1 x="5000" y="100"/>
+      <p2 x="5540" y="100"/>
+    </wire>
+    <wire>
+      <p1 x="3120" y="100"/>
+      <p2 x="3260" y="100"/>
+    </wire>
+    <wire>
+      <p1 x="3260" y="100"/>
+      <p2 x="3420" y="100"/>
+    </wire>
+    <wire>
+      <p1 x="1680" y="100"/>
+      <p2 x="1760" y="100"/>
+    </wire>
+    <wire>
+      <p1 x="560" y="740"/>
+      <p2 x="2920" y="740"/>
+    </wire>
+    <wire>
+      <p1 x="2920" y="740"/>
+      <p2 x="2960" y="740"/>
+    </wire>
+    <wire>
+      <p1 x="940" y="-360"/>
+      <p2 x="1200" y="-360"/>
+    </wire>
+    <wire>
+      <p1 x="-560" y="-1000"/>
+      <p2 x="4980" y="-1000"/>
+    </wire>
+    <wire>
+      <p1 x="600" y="360"/>
+      <p2 x="660" y="360"/>
+    </wire>
+    <wire>
+      <p1 x="960" y="360"/>
+      <p2 x="1320" y="360"/>
+    </wire>
+    <wire>
+      <p1 x="1800" y="360"/>
+      <p2 x="4040" y="360"/>
+    </wire>
+    <wire>
+      <p1 x="3160" y="620"/>
+      <p2 x="3280" y="620"/>
+    </wire>
+    <wire>
+      <p1 x="600" y="620"/>
+      <p2 x="1680" y="620"/>
+    </wire>
+    <wire>
+      <p1 x="940" y="-240"/>
+      <p2 x="960" y="-240"/>
+    </wire>
+    <wire>
+      <p1 x="2020" y="-240"/>
+      <p2 x="2120" y="-240"/>
+    </wire>
+    <wire>
+      <p1 x="2120" y="-240"/>
+      <p2 x="4180" y="-240"/>
+    </wire>
+    <wire>
+      <p1 x="540" y="240"/>
+      <p2 x="1320" y="240"/>
+    </wire>
+    <wire>
+      <p1 x="1640" y="240"/>
+      <p2 x="1960" y="240"/>
+    </wire>
+    <wire>
+      <p1 x="2180" y="240"/>
+      <p2 x="2220" y="240"/>
+    </wire>
+    <wire>
+      <p1 x="2400" y="240"/>
+      <p2 x="3920" y="240"/>
+    </wire>
+    <wire>
+      <p1 x="480" y="-500"/>
+      <p2 x="620" y="-500"/>
+    </wire>
+    <wire>
+      <p1 x="940" y="-500"/>
+      <p2 x="1220" y="-500"/>
+    </wire>
+    <wire>
+      <p1 x="1820" y="-120"/>
+      <p2 x="2380" y="-120"/>
+    </wire>
+    <wire>
+      <p1 x="2580" y="-120"/>
+      <p2 x="2600" y="-120"/>
+    </wire>
+    <wire>
+      <p1 x="5060" y="120"/>
+      <p2 x="5220" y="120"/>
+    </wire>
+    <wire>
+      <p1 x="-660" y="120"/>
+      <p2 x="-600" y="120"/>
+    </wire>
+    <wire>
+      <p1 x="1120" y="120"/>
+      <p2 x="1320" y="120"/>
+    </wire>
+    <wire>
+      <p1 x="2160" y="120"/>
+      <p2 x="2200" y="120"/>
+    </wire>
+    <wire>
+      <p1 x="580" y="120"/>
+      <p2 x="620" y="120"/>
+    </wire>
+    <wire>
+      <p1 x="4020" y="120"/>
+      <p2 x="4280" y="120"/>
+    </wire>
+    <wire>
+      <p1 x="1640" y="120"/>
+      <p2 x="1740" y="120"/>
+    </wire>
+    <wire>
+      <p1 x="4600" y="120"/>
+      <p2 x="4840" y="120"/>
+    </wire>
+    <wire>
+      <p1 x="5580" y="120"/>
+      <p2 x="5600" y="120"/>
+    </wire>
+    <wire>
+      <p1 x="5920" y="120"/>
+      <p2 x="6140" y="120"/>
+    </wire>
+    <wire>
+      <p1 x="4840" y="120"/>
+      <p2 x="5000" y="120"/>
+    </wire>
+    <wire>
+      <p1 x="5000" y="120"/>
+      <p2 x="5040" y="120"/>
+    </wire>
+    <wire>
+      <p1 x="2940" y="760"/>
+      <p2 x="2960" y="760"/>
+    </wire>
+    <wire>
+      <p1 x="940" y="-380"/>
+      <p2 x="1180" y="-380"/>
+    </wire>
+    <wire>
+      <p1 x="1780" y="380"/>
+      <p2 x="4060" y="380"/>
+    </wire>
+    <wire>
+      <p1 x="600" y="380"/>
+      <p2 x="660" y="380"/>
+    </wire>
+    <wire>
+      <p1 x="0" y="-20"/>
+      <p2 x="0" y="60"/>
+    </wire>
+    <wire>
+      <p1 x="4100" y="60"/>
+      <p2 x="4100" y="420"/>
+    </wire>
+    <wire>
+      <p1 x="-520" y="-60"/>
+      <p2 x="-520" y="20"/>
+    </wire>
+    <wire>
+      <p1 x="520" y="60"/>
+      <p2 x="520" y="300"/>
+    </wire>
+    <wire>
+      <p1 x="520" y="300"/>
+      <p2 x="520" y="420"/>
+    </wire>
+    <wire>
+      <p1 x="1800" y="-260"/>
+      <p2 x="1800" y="-60"/>
+    </wire>
+    <wire>
+      <p1 x="1800" y="60"/>
+      <p2 x="1800" y="360"/>
+    </wire>
+    <wire>
+      <p1 x="3080" y="60"/>
+      <p2 x="3080" y="540"/>
+    </wire>
+    <wire>
+      <p1 x="4620" y="-860"/>
+      <p2 x="4620" y="80"/>
+    </wire>
+    <wire>
+      <p1 x="1040" y="80"/>
+      <p2 x="1040" y="200"/>
+    </wire>
+    <wire>
+      <p1 x="1040" y="-340"/>
+      <p2 x="1040" y="20"/>
+    </wire>
+    <wire>
+      <p1 x="2580" y="-120"/>
+      <p2 x="2580" y="80"/>
+    </wire>
+    <wire>
+      <p1 x="1300" y="-700"/>
+      <p2 x="1300" y="-60"/>
+    </wire>
+    <wire>
+      <p1 x="5140" y="20"/>
+      <p2 x="5140" y="200"/>
+    </wire>
+    <wire>
+      <p1 x="4120" y="80"/>
+      <p2 x="4120" y="440"/>
+    </wire>
+    <wire>
+      <p1 x="3100" y="60"/>
+      <p2 x="3100" y="520"/>
+    </wire>
+    <wire>
+      <p1 x="3100" y="-80"/>
+      <p2 x="3100" y="20"/>
+    </wire>
+    <wire>
+      <p1 x="1820" y="-120"/>
+      <p2 x="1820" y="260"/>
+    </wire>
+    <wire>
+      <p1 x="540" y="100"/>
+      <p2 x="540" y="240"/>
+    </wire>
+    <wire>
+      <p1 x="2080" y="220"/>
+      <p2 x="2080" y="280"/>
+    </wire>
+    <wire>
+      <p1 x="1060" y="60"/>
+      <p2 x="1060" y="180"/>
+    </wire>
+    <wire>
+      <p1 x="1060" y="-320"/>
+      <p2 x="1060" y="0"/>
+    </wire>
+    <wire>
+      <p1 x="2600" y="-20"/>
+      <p2 x="2600" y="320"/>
+    </wire>
+    <wire>
+      <p1 x="40" y="-40"/>
+      <p2 x="40" y="20"/>
+    </wire>
+    <wire>
+      <p1 x="5160" y="-700"/>
+      <p2 x="5160" y="180"/>
+    </wire>
+    <wire>
+      <p1 x="-300" y="-40"/>
+      <p2 x="-300" y="60"/>
+    </wire>
+    <wire>
+      <p1 x="-300" y="60"/>
+      <p2 x="-300" y="180"/>
+    </wire>
+    <wire>
+      <p1 x="4140" y="160"/>
+      <p2 x="4140" y="460"/>
+    </wire>
+    <wire>
+      <p1 x="-560" y="-1000"/>
+      <p2 x="-560" y="220"/>
+    </wire>
+    <wire>
+      <p1 x="1840" y="-140"/>
+      <p2 x="1840" y="160"/>
+    </wire>
+    <wire>
+      <p1 x="1840" y="300"/>
+      <p2 x="1840" y="720"/>
+    </wire>
+    <wire>
+      <p1 x="560" y="100"/>
+      <p2 x="560" y="740"/>
+    </wire>
+    <wire>
+      <p1 x="3120" y="60"/>
+      <p2 x="3120" y="100"/>
+    </wire>
+    <wire>
+      <p1 x="-820" y="-860"/>
+      <p2 x="-820" y="140"/>
+    </wire>
+    <wire>
+      <p1 x="5940" y="180"/>
+      <p2 x="5940" y="660"/>
+    </wire>
+    <wire>
+      <p1 x="1080" y="-460"/>
+      <p2 x="1080" y="160"/>
+    </wire>
+    <wire>
+      <p1 x="2620" y="0"/>
+      <p2 x="2620" y="340"/>
+    </wire>
+    <wire>
+      <p1 x="60" y="-60"/>
+      <p2 x="60" y="0"/>
+    </wire>
+    <wire>
+      <p1 x="4160" y="180"/>
+      <p2 x="4160" y="480"/>
+    </wire>
+    <wire>
+      <p1 x="2880" y="560"/>
+      <p2 x="2880" y="680"/>
+    </wire>
+    <wire>
+      <p1 x="1860" y="-180"/>
+      <p2 x="1860" y="20"/>
+    </wire>
+    <wire>
+      <p1 x="1860" y="280"/>
+      <p2 x="1860" y="700"/>
+    </wire>
+    <wire>
+      <p1 x="1860" y="20"/>
+      <p2 x="1860" y="60"/>
+    </wire>
+    <wire>
+      <p1 x="580" y="120"/>
+      <p2 x="580" y="560"/>
+    </wire>
+    <wire>
+      <p1 x="2120" y="-240"/>
+      <p2 x="2120" y="260"/>
+    </wire>
+    <wire>
+      <p1 x="4680" y="160"/>
+      <p2 x="4680" y="600"/>
+    </wire>
+    <wire>
+      <p1 x="4680" y="600"/>
+      <p2 x="4680" y="800"/>
+    </wire>
+    <wire>
+      <p1 x="2380" y="-140"/>
+      <p2 x="2380" y="-120"/>
+    </wire>
+    <wire>
+      <p1 x="1100" y="-480"/>
+      <p2 x="1100" y="140"/>
+    </wire>
+    <wire>
+      <p1 x="6220" y="160"/>
+      <p2 x="6220" y="540"/>
+    </wire>
+    <wire>
+      <p1 x="3920" y="140"/>
+      <p2 x="3920" y="240"/>
+    </wire>
+    <wire>
+      <p1 x="80" y="-100"/>
+      <p2 x="80" y="40"/>
+    </wire>
+    <wire>
+      <p1 x="4180" y="-240"/>
+      <p2 x="4180" y="200"/>
+    </wire>
+    <wire>
+      <p1 x="2900" y="660"/>
+      <p2 x="2900" y="900"/>
+    </wire>
+    <wire>
+      <p1 x="-600" y="80"/>
+      <p2 x="-600" y="120"/>
+    </wire>
+    <wire>
+      <p1 x="1880" y="-220"/>
+      <p2 x="1880" y="40"/>
+    </wire>
+    <wire>
+      <p1 x="1880" y="220"/>
+      <p2 x="1880" y="480"/>
+    </wire>
+    <wire>
+      <p1 x="1880" y="480"/>
+      <p2 x="1880" y="520"/>
+    </wire>
+    <wire>
+      <p1 x="3160" y="40"/>
+      <p2 x="3160" y="620"/>
+    </wire>
+    <wire>
+      <p1 x="600" y="-60"/>
+      <p2 x="600" y="160"/>
+    </wire>
+    <wire>
+      <p1 x="600" y="380"/>
+      <p2 x="600" y="620"/>
+    </wire>
+    <wire>
+      <p1 x="600" y="160"/>
+      <p2 x="600" y="360"/>
+    </wire>
+    <wire>
+      <p1 x="2140" y="40"/>
+      <p2 x="2140" y="180"/>
+    </wire>
+    <wire>
+      <p1 x="4700" y="40"/>
+      <p2 x="4700" y="560"/>
+    </wire>
+    <wire>
+      <p1 x="4700" y="660"/>
+      <p2 x="4700" y="840"/>
+    </wire>
+    <wire>
+      <p1 x="3420" y="100"/>
+      <p2 x="3420" y="140"/>
+    </wire>
+    <wire>
+      <p1 x="2400" y="-20"/>
+      <p2 x="2400" y="240"/>
+    </wire>
+    <wire>
+      <p1 x="1120" y="-440"/>
+      <p2 x="1120" y="120"/>
+    </wire>
+    <wire>
+      <p1 x="2920" y="740"/>
+      <p2 x="2920" y="840"/>
+    </wire>
+    <wire>
+      <p1 x="360" y="-100"/>
+      <p2 x="360" y="20"/>
+    </wire>
+    <wire>
+      <p1 x="1900" y="-260"/>
+      <p2 x="1900" y="280"/>
+    </wire>
+    <wire>
+      <p1 x="620" y="400"/>
+      <p2 x="620" y="520"/>
+    </wire>
+    <wire>
+      <p1 x="2160" y="120"/>
+      <p2 x="2160" y="160"/>
+    </wire>
+    <wire>
+      <p1 x="4720" y="0"/>
+      <p2 x="4720" y="160"/>
+    </wire>
+    <wire>
+      <p1 x="1140" y="-420"/>
+      <p2 x="1140" y="100"/>
+    </wire>
+    <wire>
+      <p1 x="4980" y="-1000"/>
+      <p2 x="4980" y="-180"/>
+    </wire>
+    <wire>
+      <p1 x="120" y="-480"/>
+      <p2 x="120" y="60"/>
+    </wire>
+    <wire>
+      <p1 x="2940" y="-700"/>
+      <p2 x="2940" y="640"/>
+    </wire>
+    <wire>
+      <p1 x="2940" y="760"/>
+      <p2 x="2940" y="800"/>
+    </wire>
+    <wire>
+      <p1 x="4220" y="100"/>
+      <p2 x="4220" y="140"/>
+    </wire>
+    <wire>
+      <p1 x="1920" y="-40"/>
+      <p2 x="1920" y="20"/>
+    </wire>
+    <wire>
+      <p1 x="3200" y="60"/>
+      <p2 x="3200" y="220"/>
+    </wire>
+    <wire>
+      <p1 x="2180" y="60"/>
+      <p2 x="2180" y="160"/>
+    </wire>
+    <wire>
+      <p1 x="4740" y="-180"/>
+      <p2 x="4740" y="100"/>
+    </wire>
+    <wire>
+      <p1 x="1160" y="-400"/>
+      <p2 x="1160" y="80"/>
+    </wire>
+    <wire>
+      <p1 x="5000" y="100"/>
+      <p2 x="5000" y="120"/>
+    </wire>
+    <wire>
+      <p1 x="4240" y="-140"/>
+      <p2 x="4240" y="100"/>
+    </wire>
+    <wire>
+      <p1 x="1680" y="100"/>
+      <p2 x="1680" y="620"/>
+    </wire>
+    <wire>
+      <p1 x="1940" y="-40"/>
+      <p2 x="1940" y="0"/>
+    </wire>
+    <wire>
+      <p1 x="3220" y="60"/>
+      <p2 x="3220" y="540"/>
+    </wire>
+    <wire>
+      <p1 x="1180" y="-380"/>
+      <p2 x="1180" y="60"/>
+    </wire>
+    <wire>
+      <p1 x="6300" y="100"/>
+      <p2 x="6300" y="900"/>
+    </wire>
+    <wire>
+      <p1 x="4260" y="-700"/>
+      <p2 x="4260" y="-20"/>
+    </wire>
+    <wire>
+      <p1 x="5540" y="100"/>
+      <p2 x="5540" y="180"/>
+    </wire>
+    <wire>
+      <p1 x="-680" y="140"/>
+      <p2 x="-680" y="220"/>
+    </wire>
+    <wire>
+      <p1 x="1960" y="0"/>
+      <p2 x="1960" y="240"/>
+    </wire>
+    <wire>
+      <p1 x="3240" y="60"/>
+      <p2 x="3240" y="520"/>
+    </wire>
+    <wire>
+      <p1 x="3240" y="-60"/>
+      <p2 x="3240" y="20"/>
+    </wire>
+    <wire>
+      <p1 x="2220" y="160"/>
+      <p2 x="2220" y="180"/>
+    </wire>
+    <wire>
+      <p1 x="940" y="0"/>
+      <p2 x="940" y="40"/>
+    </wire>
+    <wire>
+      <p1 x="3760" y="-60"/>
+      <p2 x="3760" y="100"/>
+    </wire>
+    <wire>
+      <p1 x="1200" y="-360"/>
+      <p2 x="1200" y="-20"/>
+    </wire>
+    <wire>
+      <p1 x="4020" y="-80"/>
+      <p2 x="4020" y="100"/>
+    </wire>
+    <wire>
+      <p1 x="1720" y="140"/>
+      <p2 x="1720" y="440"/>
+    </wire>
+    <wire>
+      <p1 x="5560" y="60"/>
+      <p2 x="5560" y="140"/>
+    </wire>
+    <wire>
+      <p1 x="440" y="140"/>
+      <p2 x="440" y="900"/>
+    </wire>
+    <wire>
+      <p1 x="1980" y="180"/>
+      <p2 x="1980" y="460"/>
+    </wire>
+    <wire>
+      <p1 x="3260" y="60"/>
+      <p2 x="3260" y="100"/>
+    </wire>
+    <wire>
+      <p1 x="2240" y="240"/>
+      <p2 x="2240" y="260"/>
+    </wire>
+    <wire>
+      <p1 x="960" y="400"/>
+      <p2 x="960" y="540"/>
+    </wire>
+    <wire>
+      <p1 x="960" y="-240"/>
+      <p2 x="960" y="360"/>
+    </wire>
+    <wire>
+      <p1 x="1220" y="-500"/>
+      <p2 x="1220" y="-40"/>
+    </wire>
+    <wire>
+      <p1 x="4040" y="0"/>
+      <p2 x="4040" y="360"/>
+    </wire>
+    <wire>
+      <p1 x="460" y="-480"/>
+      <p2 x="460" y="540"/>
+    </wire>
+    <wire>
+      <p1 x="1740" y="120"/>
+      <p2 x="1740" y="420"/>
+    </wire>
+    <wire>
+      <p1 x="5580" y="40"/>
+      <p2 x="5580" y="120"/>
+    </wire>
+    <wire>
+      <p1 x="5580" y="200"/>
+      <p2 x="5580" y="600"/>
+    </wire>
+    <wire>
+      <p1 x="-720" y="100"/>
+      <p2 x="-720" y="180"/>
+    </wire>
+    <wire>
+      <p1 x="3280" y="620"/>
+      <p2 x="3280" y="640"/>
+    </wire>
+    <wire>
+      <p1 x="980" y="-260"/>
+      <p2 x="980" y="340"/>
+    </wire>
+    <wire>
+      <p1 x="980" y="540"/>
+      <p2 x="980" y="560"/>
+    </wire>
+    <wire>
+      <p1 x="4060" y="20"/>
+      <p2 x="4060" y="380"/>
+    </wire>
+    <wire>
+      <p1 x="480" y="-500"/>
+      <p2 x="480" y="40"/>
+    </wire>
+    <wire>
+      <p1 x="480" y="40"/>
+      <p2 x="480" y="220"/>
+    </wire>
+    <wire>
+      <p1 x="1760" y="100"/>
+      <p2 x="1760" y="400"/>
+    </wire>
+    <wire>
+      <p1 x="5600" y="-700"/>
+      <p2 x="5600" y="100"/>
+    </wire>
+    <wire>
+      <p1 x="3300" y="40"/>
+      <p2 x="3300" y="660"/>
+    </wire>
+    <wire>
+      <p1 x="1000" y="-280"/>
+      <p2 x="1000" y="280"/>
+    </wire>
+    <wire>
+      <p1 x="4840" y="120"/>
+      <p2 x="4840" y="520"/>
+    </wire>
+    <wire>
+      <p1 x="4080" y="40"/>
+      <p2 x="4080" y="400"/>
+    </wire>
+    <wire>
+      <p1 x="-500" y="-20"/>
+      <p2 x="-500" y="100"/>
+    </wire>
+    <wire>
+      <p1 x="3060" y="60"/>
+      <p2 x="3060" y="140"/>
+    </wire>
+    <wire>
+      <p1 x="500" y="80"/>
+      <p2 x="500" y="320"/>
+    </wire>
+    <wire>
+      <p1 x="500" y="320"/>
+      <p2 x="500" y="440"/>
+    </wire>
+    <wire>
+      <p1 x="1780" y="80"/>
+      <p2 x="1780" y="380"/>
+    </wire>
+    <wire>
+      <p1 x="2040" y="80"/>
+      <p2 x="2040" y="200"/>
+    </wire>
+    <wire>
+      <p1 x="2040" y="200"/>
+      <p2 x="2040" y="220"/>
+    </wire>
+    <wire>
+      <p1 x="4600" y="-220"/>
+      <p2 x="4600" y="-20"/>
+    </wire>
+    <wire>
+      <p1 x="1020" y="-300"/>
+      <p2 x="1020" y="260"/>
+    </wire>
+    <wire>
+      <p1 x="4860" y="-160"/>
+      <p2 x="4860" y="180"/>
+    </wire>
+    <wire>
+      <p1 x="6140" y="120"/>
+      <p2 x="6140" y="140"/>
+    </wire>
+  </wires>
+  <measurementOrdering/>
+</circuit>
